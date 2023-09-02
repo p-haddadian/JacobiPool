@@ -17,7 +17,11 @@ class JacobiPool(torch.nn.Module):
         if batch is None:
             batch = edge_index.new_zeros(x.size(0))
         
+        # score: (|V|, heads_H * out = 1)    seems: att score for every node (aggregated from edge att)
+        # attention_e: ((2, |E|), (|E|, heads_H))   seems: att score for every edge.
         score, attention_e = self.attention_layer(x, edge_index, return_attention_weights = True)
+        edge_index_after, edge_attention = attention_e[0], attention_e[1]
         
+        # TODO Convert the matrices to a proper format for further multiplications
         # TODO Jacobi computation of A^k.
         
