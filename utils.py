@@ -3,6 +3,7 @@ from torch import Tensor
 from torch_geometric.utils import degree
 from torch_sparse import SparseTensor
 
+
 class EarlyStopping:
     def __init__(self, patience=10):
         self.patience = patience
@@ -30,9 +31,9 @@ class EarlyStopping:
         '''Saves model when validation loss decrease.'''
         torch.save(model.state_dict(), 'es_checkpoint.pt')
 
-def build_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int, aggr: str):
+def sparse_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int, aggr: str):
     '''
-    convert edge_index and edge_weight to the sparse adjacency matrix.
+    Convert edge_index and edge_weight to the sparse adjacency matrix.
     Args:
         edge_index (Tensor): An edge index to be converted in the shape of (2, |E|)
         edge_weight (Tensor): A tensor containing the weight assigned to each of the edges in the shape of (|E|)
@@ -49,7 +50,7 @@ def build_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int, aggr: str):
         val = edge_weight
     elif aggr == 'GCN':
         deg = torch.pow(deg, -0.5)
-        val = deg[edge_index[0]] * deg * deg[edge_index[1]]
+        val = deg[edge_index[0]] * edge_weight * deg[edge_index[1]]
     else:
         raise ValueError('not defined aggregation function')
     
@@ -59,3 +60,23 @@ def build_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int, aggr: str):
                        sparse_sizes=(n_node, n_node)).coalesce()
     ret = ret.cuda() if edge_index.is_cuda else ret
     return ret
+
+def dense_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int = -1, weighted: bool = True):
+    '''
+    Convert a matrix in form of edge_index and edge_weight to one big adjacency matrix.
+    Args:
+        - edge_index (Tensor): An edge index to be converted in the shape of (2, |E|)
+        - edge_weight (Tensor): A tensor containing the weight assigned to each of the edges in the shape of (|E|)
+        - n_node (int): Number of the nodes in the graph
+        - weighted (bool): Indicate the whether the adjacency should be weighted or not
+    '''
+    if n_node == -1:
+        n_node = int(edge_index.max().item() + 1)
+    
+    adj = torch.zeros((n_node, n_node))
+    if weighted:
+        adj[edge_index[0], edge_index[1]] = edge_weight
+    else:
+        adj[edge_index[0], edge_index[1]] = 1.0
+    return adj
+
