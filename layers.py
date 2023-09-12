@@ -1,4 +1,5 @@
 import torch
+from torch.nn import Linear
 from torch.nn.parameter import Parameter
 from torch_geometric.nn import GATConv, GCNConv
 from torch_geometric.nn.pool.topk_pool import filter_adj, topk
@@ -60,7 +61,10 @@ class JacobiPool(torch.nn.Module):
         self.attention_layer = conv(in_channels, 1)
         self.non_linearity = non_linearity
         self.K = hop_num
+        self.adj = None
         self.alphas = Parameter(torch.randn(self.K + 1))
+        # self.trans = Parameter(torch.randn(in_channels, 1))
+        self.lin = Linear(in_channels, 1)
         self.approx_func = approx_func
     
     def forward(self, x, edge_index, edge_attr = None, batch = None):
@@ -85,11 +89,21 @@ class JacobiPool(torch.nn.Module):
         self.L = get_laplacian(edge_index_after, edge_attention, normalization='sym')
         self.L = dense_adj(self.L[0], self.L[1])
 
-        # computing k-hop of laplacian using polynomial approximation
+        # computing k-hop of laplacian using polynomial approximation (|V| * |V|) = (N * N)
         poly_a = self.approx_func(self.K, self.adj, self.alphas)
 
-        # TODO Jacobi computation of A^k.
+        # Aggregation of multi-hop attention scores.
+        x_hat = self.lin(x).squeeze()
+        agg_score = torch.matmul(poly_a, x_hat)
 
-        # TODO Aggregation of multi-hop attention scores.
+        ##### Top-K selection procedure #####
+        perm = topk(agg_score, self.ratio, batch)
+        x = x[perm] * self.non_linearity(agg_score[perm]).view(-1, 1)
+        batch = batch[perm]
+
+        edge_index, edge_attr = filter_adj(edge_index, edge_attr, perm, num_nodes=agg_score.size(0))
+
+        return x, edge_index, edge_attr, batch, perm
+        
 
         

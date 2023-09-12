@@ -13,7 +13,7 @@ class Net(torch.nn.Module):
         super(Net, self).__init__()
         self.args = args
         self.num_features = args.num_features
-        self.hidden = args.hidden
+        self.hidden = args.num_hidden
         self.num_classes = args.num_classes
         self.pooling_ratio = args.pooling_ratio
         self.dropout_ratio = args.dropout_ratio
@@ -33,6 +33,25 @@ class Net(torch.nn.Module):
         self.lin3 = Linear(self.hidden // 2, self.num_classes)
         
     def forward(self, data):
-        #TODO: write the rest of the forward
+        x, edge_index, batch = data.x, data.edge_index, data.batch
+
+        x = F.relu(self.conv1(x, edge_index))
+        x, edge_index, _, batch, _ = self.pool1(x, edge_index, None, batch)
+        x1 = torch.cat([gmp(x, batch), gap(x, batch)], dim= 1)
+
+        x = F.relu(self.conv2(x, edge_index))
+        x, edge_index, _, batch, _ = self.pool2(x, edge_index, None, batch)
+        x2 = torch.cat([gmp(x, batch), gap(x, batch)], dim= 1)
+
+        x = F.relu(self.conv3(x, edge_index))
+        x, edge_index, _, batch, _ = self.pool3(x, edge_index, None, batch)
+        x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim= 1)
+
+        x = x1 + x2 + x3
         
-        return
+        x = F.relu(self.lin1(x))
+        x = F.dropout(x, p=self.dropout_ratio, training=self.training)
+        x = F.relu(self.lin2(x))
+        x = F.log_softmax(self.lin3(x), dim=-1)
+        
+        return x

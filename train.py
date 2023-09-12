@@ -26,7 +26,7 @@ def arg_parse(args = None):
     parser.add_argument('--dropout_ratio', type=float, default=0.5, help='dropout ratio')
     parser.add_argument('--num_heads', type=int, default=8, help="number of hidden attention heads")
     # parser.add_argument('--alpha', type=float, default=.15, help='alpha')
-    parser.add_argument("--hop_num", type=int, default=4, help="hop number")
+    parser.add_argument("--hop_num", type=int, default=2, help="hop number")
     parser.add_argument("--p_norm", type=int, default=0.0, help="p_norm")
     parser.add_argument('--early_stop', default=False, help="indicates whether to use early stop or not")
     parser.add_argument('--patience', type=int, default=50, help='patience for earlystopping')
@@ -63,6 +63,7 @@ def main(args):
         args.device = 'cuda:0'
     
     # loading the dataset
+    print('path:', os.path.join('data',args.dataset))
     dataset = TUDataset(os.path.join('data', args.dataset), name=args.dataset)
     args.num_classes = dataset.num_classes
     args.num_features = dataset.num_features
