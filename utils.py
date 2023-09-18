@@ -1,6 +1,7 @@
 import torch
 from torch import Tensor
 from torch_geometric.utils import degree
+from torch_geometric.utils import to_torch_coo_tensor, to_torch_csr_tensor
 from torch_sparse import SparseTensor
 
 
@@ -31,7 +32,7 @@ class EarlyStopping:
         '''Saves model when validation loss decrease.'''
         torch.save(model.state_dict(), 'es_checkpoint.pt')
 
-def sparse_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int, aggr: str):
+def sparse_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int, aggr: str, format: str = 'coo'):
     '''
     Convert edge_index and edge_weight to the sparse adjacency matrix.
     Args:
@@ -40,7 +41,12 @@ def sparse_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int, aggr: str):
         n_node (int): Number of the nodes in the graph
         aggr (str): How sparse adjacency matrix is going to be normalized (mean, sum, GCN)
     '''
+    if n_node == -1:
+        n_node = int(edge_index.max().item() + 1)
     
+    # Convert edge weight to the form of a vector
+    edge_weight = edge_weight.view(-1)
+
     deg = degree(edge_index[0], n_node)
     deg[deg < 0.5] += 1.0   # preprocessing for isolated nodes
     ret = None
@@ -53,11 +59,16 @@ def sparse_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int, aggr: str):
         val = deg[edge_index[0]] * edge_weight * deg[edge_index[1]]
     else:
         raise ValueError('not defined aggregation function')
-    
-    ret = SparseTensor(row= edge_index[0],
-                       col= edge_index[1],
-                       value= val,
-                       sparse_sizes=(n_node, n_node)).coalesce()
+
+    if format == 'coo':
+        ret = to_torch_coo_tensor(edge_index, val, (n_node, n_node))
+    elif format == 'csr':
+        ret = to_torch_csr_tensor(edge_index, val, (n_node, n_node))
+    else:
+        ret = SparseTensor(row= edge_index[0],
+                        col= edge_index[1],
+                        value= val,
+                        sparse_sizes=(n_node, n_node)).coalesce()
     ret = ret.cuda() if edge_index.is_cuda else ret
     return ret
 

@@ -5,13 +5,13 @@ from torch_geometric.nn import GATConv, GCNConv
 from torch_geometric.nn.pool.topk_pool import filter_adj, topk
 from torch_geometric.utils import get_laplacian
 
-from utils import dense_adj
+from utils import dense_adj, sparse_adj
 
 
 def jacobi(k, A, a = 1.0, b = 1.0):
     # This is compatible with the dense matrix only
     if k == 0:
-        return torch.eye(A.size(0))
+        return torch.eye(A.size(0)).to_sparse_coo()
     elif k == 1:
         return ((a - b) / 2) + ((a + b + 2) / 2) * A
     else:
@@ -33,8 +33,9 @@ def chebyshev(k, A):
     '''
     Chebyshev polynomial approximation
     '''
+    # print('A shape: ', A)
     if k == 0:
-        return torch.eye(A.size(0))
+        return torch.eye(A.size(0)).to_sparse_coo()
     elif k == 1:
         return A
     else:
@@ -43,13 +44,14 @@ def chebyshev(k, A):
         return lhs - rhs
 
 
-def poly_approx(K, adj, alphas, poly_fn = jacobi):
+def poly_approx(K, adj, alphas, poly_fn = chebyshev):
     '''
     Computes the polynomial approximation according to the specified polynomial function
     '''
-    polynomial = torch.zeros_like(adj)
+    polynomial = torch.zeros_like(adj).coalesce()
+    # print('polyomial shape', polynomial)
     for k in range(K + 1):
-        polynomial += alphas[k] * torch.tensor(poly_fn(k, adj), dtype=torch.float32)
+        polynomial += alphas[k] * poly_fn(k, adj)
     return polynomial
 
 
@@ -79,15 +81,17 @@ class JacobiPool(torch.nn.Module):
         # Construct a weighted adjacency matrix via the attention scores assigned to each edge
         if self.adj is None:
             n_node = x.size(0)
-            self.adj = dense_adj(edge_index_after, edge_attention, n_node)
+            # self.adj = dense_adj(edge_index_after, edge_attention, n_node)
+            self.adj = sparse_adj(edge_index_after, edge_attention, n_node, aggr='sum', format='coo')
+            # print('self.adj', self.adj)
         
         # Constructing D over adjacency
-        vals = torch.sum(self.adj, dim= 1)
-        self.D = torch.diag(vals)
+        # vals = torch.sum(self.adj, dim= 1)
+        # self.D = torch.diag(vals)
 
         # Constructing Laplacian using torch_geometric.utils
-        self.L = get_laplacian(edge_index_after, edge_attention, normalization='sym')
-        self.L = dense_adj(self.L[0], self.L[1])
+        # self.L = get_laplacian(edge_index_after, edge_attention, normalization='sym')
+        # self.L = dense_adj(self.L[0], self.L[1])
 
         # computing k-hop of laplacian using polynomial approximation (|V| * |V|) = (N * N)
         poly_a = self.approx_func(self.K, self.adj, self.alphas)

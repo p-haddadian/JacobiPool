@@ -81,7 +81,7 @@ def main(args):
     test_loader = DataLoader(test_set,batch_size=1,shuffle=False)
 
     # logger
-    logging.info("""----Data Statistics----
+    print("""----Data Statistics----
                  Dataset: %s
                  # of graphs: %d
                  # of classes: %d
@@ -124,20 +124,20 @@ def main(args):
         print('Epoch: {0} | Train Loss: {1:.4f} | Val Loss: {2:.4f} | Val Acc: {3:.4f}'.format(epoch, train_loss, val_loss, val_acc))
         if val_loss < min_loss:
             torch.save(model, 'latest.pth')
-            logging.info('Model saved at epoch {}'.format(epoch))
+            print('Model saved at epoch {}'.format(epoch))
             min_loss = val_loss
             patience = 0
         else:
             patience += 1
         if patience > args.patience:
-            logging.warning('Maximum patience reached at epoch {} and val loss had no change'.format(epoch))
+            print('Maximum patience reached at epoch {} and val loss had no change'.format(epoch))
             break
     
     # Testing the model
     model.load_state_dict(torch.load('latest.pth'))
     test_acc, test_loss = test(model, test_loader, args)
-    logging.info('---------------Test----------------')
-    logging.info('Test loss: {0:.4f} | Test Acc: {1:.4f}'.format(test_loss, test_acc))
+    print('---------------Test----------------')
+    print('Test loss: {0:.4f} | Test Acc: {1:.4f}'.format(test_loss, test_acc))
 
 
 
