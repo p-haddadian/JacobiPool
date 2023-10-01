@@ -79,11 +79,10 @@ class JacobiPool(torch.nn.Module):
         edge_index_after, edge_attention = attention_e[0], attention_e[1]
 
         # Construct a weighted adjacency matrix via the attention scores assigned to each edge
-        if self.adj is None:
-            n_node = x.size(0)
-            # self.adj = dense_adj(edge_index_after, edge_attention, n_node)
-            self.adj = sparse_adj(edge_index_after, edge_attention, n_node, aggr='sum', format='coo')
-            # print('self.adj', self.adj)
+        n_node = x.size(0)
+        # self.adj = dense_adj(edge_index_after, edge_attention, n_node)
+        self.adj = sparse_adj(edge_index_after, edge_attention, n_node, aggr='sum', format='coo')
+        # print('self.adj', self.adj)
         
         # Constructing D over adjacency
         # vals = torch.sum(self.adj, dim= 1)

@@ -14,14 +14,14 @@ from utils import EarlyStopping
 
 
 def arg_parse(args = None):
-    parser = argparse.ArgumentParser(description='MAGPool')
+    parser = argparse.ArgumentParser(description='JacobiPool')
     parser.add_argument('--dataset', type=str, default='DD', help='DD/PROTEINS/NCI1/NCI109/Mutagenicity')
-    parser.add_argument('--epochs', type=int, default=100000, help='maximum number of epochs')
-    parser.add_argument('--seed', type=int, default=777, help='seed')
-    parser.add_argument('--batch_size', type=int, default=128, help='batch size')
+    parser.add_argument('--epochs', type=int, default=2000, help='maximum number of epochs')
+    parser.add_argument('--seed', type=int, default=1234, help='seed')
+    parser.add_argument('--batch_size', type=int, default=64, help='batch size')
     parser.add_argument('--lr', type=float, default=0.0005, help='learning rate')
     parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay')
-    parser.add_argument('--num_hidden', type=int, default=128, help='hidden size')
+    parser.add_argument('--num_hidden', type=int, default=256, help='hidden size')
     parser.add_argument('--pooling_ratio', type=float, default=0.5, help='pooling ratio')
     parser.add_argument('--dropout_ratio', type=float, default=0.5, help='dropout ratio')
     parser.add_argument('--num_heads', type=int, default=8, help="number of hidden attention heads")
@@ -99,7 +99,7 @@ def main(args):
         stopper = EarlyStopping(args.patience)
     loss_fcn = torch.nn.CrossEntropyLoss()
 
-    min_loss = 1e-10
+    min_loss = 1e10
     patience = 0
 
     # Training the model
