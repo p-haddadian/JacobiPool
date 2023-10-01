@@ -123,7 +123,7 @@ def main(args):
         train_loss = loss_all / len(train_loader)
         print('Epoch: {0} | Train Loss: {1:.4f} | Val Loss: {2:.4f} | Val Acc: {3:.4f}'.format(epoch, train_loss, val_loss, val_acc))
         if val_loss < min_loss:
-            torch.save(model, 'latest.pth')
+            torch.save(model.state_dict(), 'latest.pth')
             print('Model saved at epoch {}'.format(epoch))
             min_loss = val_loss
             patience = 0
