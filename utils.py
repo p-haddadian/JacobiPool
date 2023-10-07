@@ -100,6 +100,7 @@ def plotter(losses, accuracies = None):
     plt.legend()
     plt.xlabel('epochs')
     plt.ylabel('loss')
+    plt.savefig('plot.png')
     plt.show()
 
     if accuracies != None:
