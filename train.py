@@ -11,17 +11,18 @@ from torch_geometric.datasets import TUDataset
 
 from networks import Net
 from utils import EarlyStopping
+from utils import plotter
 
 
 def arg_parse(args = None):
     parser = argparse.ArgumentParser(description='JacobiPool')
     parser.add_argument('--dataset', type=str, default='DD', help='DD/PROTEINS/NCI1/NCI109/Mutagenicity')
-    parser.add_argument('--epochs', type=int, default=2000, help='maximum number of epochs')
-    parser.add_argument('--seed', type=int, default=1234, help='seed')
-    parser.add_argument('--batch_size', type=int, default=64, help='batch size')
-    parser.add_argument('--lr', type=float, default=0.0005, help='learning rate')
+    parser.add_argument('--epochs', type=int, default=5, help='maximum number of epochs')
+    parser.add_argument('--seed', type=int, default=777, help='seed')
+    parser.add_argument('--batch_size', type=int, default=4, help='batch size')
+    parser.add_argument('--lr', type=float, default=0.005, help='learning rate')
     parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay')
-    parser.add_argument('--num_hidden', type=int, default=256, help='hidden size')
+    parser.add_argument('--num_hidden', type=int, default=32, help='hidden size')
     parser.add_argument('--pooling_ratio', type=float, default=0.5, help='pooling ratio')
     parser.add_argument('--dropout_ratio', type=float, default=0.5, help='dropout ratio')
     parser.add_argument('--num_heads', type=int, default=8, help="number of hidden attention heads")
@@ -102,6 +103,9 @@ def main(args):
     min_loss = 1e10
     patience = 0
 
+    train_losses = list()
+    val_losses = list()
+
     # Training the model
     for epoch in range(args.epochs):
         model.train()
@@ -113,7 +117,7 @@ def main(args):
             loss = loss_fcn(out, data.y)
             pred = out.max(dim=1)[1]
             correct += pred.eq(data.y).sum().item()
-            loss_all += data.y.size(0) * loss.item()
+            loss_all += loss.item()
             train_acc = correct / len(train_loader.dataset)
             print('Training Loss: {0:.4f}| Training Acc: {1:.4f}'.format(loss, train_acc))
             loss.backward()
@@ -122,6 +126,10 @@ def main(args):
         val_acc, val_loss = test(model, val_loader, args)
         train_loss = loss_all / len(train_loader)
         print('Epoch: {0} | Train Loss: {1:.4f} | Val Loss: {2:.4f} | Val Acc: {3:.4f}'.format(epoch, train_loss, val_loss, val_acc))
+
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
+
         if val_loss < min_loss:
             torch.save(model.state_dict(), 'latest.pth')
             print('Model saved at epoch {}'.format(epoch))
@@ -129,6 +137,7 @@ def main(args):
             patience = 0
         else:
             patience += 1
+        
         if patience > args.patience:
             print('Maximum patience reached at epoch {} and val loss had no change'.format(epoch))
             break
@@ -138,6 +147,10 @@ def main(args):
     test_acc, test_loss = test(model, test_loader, args)
     print('---------------Test----------------')
     print('Test loss: {0:.4f} | Test Acc: {1:.4f}'.format(test_loss, test_acc))
+
+    # Plotting the necessary metrics
+    losses = [train_losses, val_losses]
+    plotter(losses)
 
 
 

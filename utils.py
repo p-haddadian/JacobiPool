@@ -3,6 +3,7 @@ from torch import Tensor
 from torch_geometric.utils import degree
 from torch_geometric.utils import to_torch_coo_tensor, to_torch_csr_tensor
 from torch_sparse import SparseTensor
+import matplotlib.pyplot as plt
 
 
 class EarlyStopping:
@@ -91,3 +92,20 @@ def dense_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int = -1, weighte
         adj[edge_index[0], edge_index[1]] = 1.0
     return adj
 
+
+def plotter(losses, accuracies = None):
+    plt.plot(losses[0], label='training loss')
+    plt.plot(losses[1], label='validation loss')
+    plt.title('Evaluating Loss')
+    plt.legend()
+    plt.xlabel('epochs')
+    plt.ylabel('loss')
+    plt.show()
+
+    if accuracies != None:
+        plt.plot(accuracies)
+        plt.title('Evaluating Accuracy')
+        plt.legend()
+        plt.xlabel('epochs')
+        plt.ylabel('accuracy')
+        plt.show()
