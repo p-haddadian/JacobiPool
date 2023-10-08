@@ -13,7 +13,7 @@ def jacobi(k, A, a = 1.0, b = 1.0):
     if k == 0:
         return torch.eye(A.size(0)).to_sparse_coo()
     elif k == 1:
-        return ((a - b) / 2) + ((a + b + 2) / 2) * A
+        return (((a - b) / 2) + ((a + b + 2) / 2)) * A
     else:
         theta0_num = (2 * k + a + b) * (2 * k + a + b - 1)
         theta0_den = 2 * k * (k + a + b)
@@ -44,7 +44,7 @@ def chebyshev(k, A):
         return lhs - rhs
 
 
-def poly_approx(K, adj, alphas, poly_fn = chebyshev):
+def poly_approx(K, adj, alphas, poly_fn = jacobi):
     '''
     Computes the polynomial approximation according to the specified polynomial function
     '''
