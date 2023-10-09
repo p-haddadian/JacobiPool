@@ -10,8 +10,9 @@ from utils import dense_adj, sparse_adj
 
 def jacobi(k, A, a = 1.0, b = 1.0):
     # This is compatible with the dense matrix only
+    device = A.get_device()
     if k == 0:
-        return torch.eye(A.size(0)).to_sparse_coo()
+        return torch.eye(A.size(0)).to_sparse_coo().to(device)
     elif k == 1:
         return (((a - b) / 2) + ((a + b + 2) / 2)) * A
     else:
@@ -33,9 +34,10 @@ def chebyshev(k, A):
     '''
     Chebyshev polynomial approximation
     '''
+    device = A.get_device()
     # print('A shape: ', A)
     if k == 0:
-        return torch.eye(A.size(0)).to_sparse_coo()
+        return torch.eye(A.size(0)).to_sparse_coo().to(device)
     elif k == 1:
         return A
     else:
