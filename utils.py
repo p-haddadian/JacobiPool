@@ -5,6 +5,8 @@ from torch_geometric.utils import to_torch_coo_tensor, to_torch_csr_tensor
 from torch_sparse import SparseTensor
 import matplotlib.pyplot as plt
 
+from scipy.sparse.linalg import eigsh
+import scipy.sparse as sp
 
 class EarlyStopping:
     def __init__(self, patience=10):
@@ -87,10 +89,38 @@ def dense_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int = -1, weighte
     
     adj = torch.zeros((n_node, n_node))
     if weighted:
-        adj[edge_index[0], edge_index[1]] = edge_weight
+        adj[edge_index[0], edge_index[1]] = edge_weight.reshape(-1)
     else:
         adj[edge_index[0], edge_index[1]] = 1.0
     return adj
+
+def laplacian_scale(laplacian_index: Tensor, laplacian_weight: Tensor, n_node: int = -1):
+    '''
+    Scales the laplacian of the input graph by the following function: (2 * L) / lambda_max - I_N
+    Args:
+        - laplacian_index (Tensor): Laplacian in form of edge index (2, |E|)
+        - laplacian_weight (Tensor): Laplacian weights in form of edge weight (|E|)
+        - n_node (int)(Optianal): Number of the nodes in the graph (Default = -1)
+    Output:
+        - Scaled laplacian in the sparse format
+    '''
+    if n_node == -1:
+        n_node = int(laplacian_index.max().item() + 1)
+
+    laplacian_s = sparse_adj(laplacian_index, laplacian_weight, n_node, aggr='sum', format='coo')
+    laplacian_d = dense_adj(laplacian_index, laplacian_weight, n_node)
+
+    print('determinants', torch.linalg.det(laplacian_d))
+
+    evals = torch.linalg.eig(laplacian_d).eigenvalues
+    evals = torch.view_as_real(evals)
+    lambda_max = torch.max(evals)
+    # lambda_max = lambda_max.type(torch.float32)
+
+    id = torch.eye(n_node).to_sparse_coo()
+
+    scaled_laplacian = torch.div(torch.mul(laplacian_s, 2), lambda_max) - id
+    return scaled_laplacian
 
 
 def plotter(losses, accuracies = None):
@@ -100,7 +130,7 @@ def plotter(losses, accuracies = None):
     plt.legend()
     plt.xlabel('epochs')
     plt.ylabel('loss')
-    plt.savefig('plot.png')
+    plt.savefig('plot-loss.png')
     plt.show()
 
     if accuracies != None:
@@ -109,4 +139,5 @@ def plotter(losses, accuracies = None):
         plt.legend()
         plt.xlabel('epochs')
         plt.ylabel('accuracy')
+        plt.savefig('plot-acc.png')
         plt.show()
