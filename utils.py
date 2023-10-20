@@ -104,16 +104,19 @@ def laplacian_scale(laplacian_index: Tensor, laplacian_weight: Tensor, n_node: i
     Output:
         - Scaled laplacian in the sparse format
     '''
+    eps = 10e-6
     if n_node == -1:
         n_node = int(laplacian_index.max().item() + 1)
 
     laplacian_s = sparse_adj(laplacian_index, laplacian_weight, n_node, aggr='sum', format='coo')
     laplacian_d = dense_adj(laplacian_index, laplacian_weight, n_node)
 
-    print('determinants', torch.linalg.det(laplacian_d))
+    # print('determinants', torch.linalg.det(laplacian_d))
 
-    evals = torch.linalg.eig(laplacian_d).eigenvalues
-    evals = torch.view_as_real(evals)
+    evals = torch.linalg.eigh(laplacian_d).eigenvalues
+    # evals = torch.view_as_real(evals)
+    # evals = evals + eps # To avoid of zero eigenval existence
+
     lambda_max = torch.max(evals)
     # lambda_max = lambda_max.type(torch.float32)
 

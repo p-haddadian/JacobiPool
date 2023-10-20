@@ -5,7 +5,7 @@ from torch_geometric.nn import GATConv, GCNConv
 from torch_geometric.nn.pool.topk_pool import filter_adj, topk
 from torch_geometric.utils import get_laplacian
 
-from utils import dense_adj, sparse_adj, laplacian_scale
+from utils import dense_adj, sparse_adj
 
 
 def jacobi(k, A, a = 1.0, b = 1.0):
@@ -37,7 +37,7 @@ def chebyshev(k, A):
     device = A.get_device()
     # print('A shape: ', A)
     if k == 0:
-        return torch.eye(A.size(0)).to_sparse_coo()
+        return torch.eye(A.size(0)).to_sparse_coo().to(device)
     elif k == 1:
         return A
     else:
@@ -46,7 +46,7 @@ def chebyshev(k, A):
         return lhs - rhs
 
 
-def poly_approx(K, adj, alphas, poly_fn = chebyshev):
+def poly_approx(K, adj, alphas, poly_fn = jacobi):
     '''
     Computes the polynomial approximation according to the specified polynomial function
     '''
@@ -82,14 +82,20 @@ class JacobiPool(torch.nn.Module):
 
         # Construct a weighted adjacency matrix via the attention scores assigned to each edge
         n_node = x.size(0)
+        # self.adj = dense_adj(edge_index_after, edge_attention, n_node)
         self.adj = sparse_adj(edge_index_after, edge_attention, n_node, aggr='sum', format='coo')
+        # print('self.adj', self.adj)
+        
+        # Constructing D over adjacency
+        # vals = torch.sum(self.adj, dim= 1)
+        # self.D = torch.diag(vals)
 
         # Constructing Laplacian using torch_geometric.utils
-        laplacian_index, laplacian_weight = get_laplacian(edge_index_after, edge_attention, normalization='sym')
-        self.L = laplacian_scale(laplacian_index, laplacian_weight, n_node)
+        # self.L = get_laplacian(edge_index_after, edge_attention, normalization='sym')
+        # self.L = dense_adj(self.L[0], self.L[1])
 
         # computing k-hop of laplacian using polynomial approximation (|V| * |V|) = (N * N)
-        poly_a = self.approx_func(self.K, self.L, self.alphas)
+        poly_a = self.approx_func(self.K, self.adj, self.alphas)
 
         # Aggregation of multi-hop attention scores.
         x_hat = self.lin(x).squeeze()
