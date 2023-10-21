@@ -11,6 +11,8 @@ from utils import dense_adj, sparse_adj, laplacian_scale
 def jacobi(k, A, a = 1.0, b = 1.0):
     # This is compatible with the dense matrix only
     device = A.get_device()
+    if device == -1:
+        device = 'cpu'
     if k == 0:
         return torch.eye(A.size(0)).to_sparse_coo().to(device)
     elif k == 1:
@@ -35,9 +37,11 @@ def chebyshev(k, A):
     Chebyshev polynomial approximation
     '''
     device = A.get_device()
+    if device == -1:
+        device = 'cpu'
     # print('A shape: ', A)
     if k == 0:
-        return torch.eye(A.size(0)).to_sparse_coo()
+        return torch.eye(A.size(0)).to_sparse_coo().to(device)
     elif k == 1:
         return A
     else:

@@ -104,6 +104,9 @@ def laplacian_scale(laplacian_index: Tensor, laplacian_weight: Tensor, n_node: i
     Output:
         - Scaled laplacian in the sparse format
     '''
+    device = laplacian_index.get_device()
+    if device == -1:
+        device = 'cpu'
     eps = 10e-6
     if n_node == -1:
         n_node = int(laplacian_index.max().item() + 1)
@@ -120,7 +123,7 @@ def laplacian_scale(laplacian_index: Tensor, laplacian_weight: Tensor, n_node: i
     lambda_max = torch.max(evals)
     # lambda_max = lambda_max.type(torch.float32)
 
-    id = torch.eye(n_node).to_sparse_coo()
+    id = torch.eye(n_node).to_sparse_coo().to(device)
 
     scaled_laplacian = torch.div(torch.mul(laplacian_s, 2), lambda_max) - id
     return scaled_laplacian
