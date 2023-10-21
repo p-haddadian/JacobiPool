@@ -1,11 +1,13 @@
 import torch
 from torch import Tensor
-from torch_geometric.utils import degree
+from torch_geometric.utils import degree, is_undirected
 from torch_geometric.utils import to_torch_coo_tensor, to_torch_csr_tensor
+from torch_geometric.utils import to_scipy_sparse_matrix
+from torch_geometric.transforms import laplacian_lambda_max
 from torch_sparse import SparseTensor
 import matplotlib.pyplot as plt
 
-from scipy.sparse.linalg import eigsh
+from scipy.sparse.linalg import eigsh, eigs
 import scipy.sparse as sp
 
 class EarlyStopping:
@@ -111,17 +113,29 @@ def laplacian_scale(laplacian_index: Tensor, laplacian_weight: Tensor, n_node: i
     if n_node == -1:
         n_node = int(laplacian_index.max().item() + 1)
 
+    ##### Computationaly efficient way for lambda_max #######
+    L_index_copy = laplacian_index.detach()
+    L_weight_copy = laplacian_weight.detach()
+    laplacian = to_scipy_sparse_matrix(L_index_copy, L_weight_copy, n_node)
+
+    eig_fn = eigsh
+
+    lambda_max = eig_fn(laplacian, k=1, which='LM', return_eigenvectors=False)
+    lambda_max = lambda_max.real[0]
+
     laplacian_s = sparse_adj(laplacian_index, laplacian_weight, n_node, aggr='sum', format='coo')
-    laplacian_d = dense_adj(laplacian_index, laplacian_weight, n_node)
 
-    # print('determinants', torch.linalg.det(laplacian_d))
+    ###### Not computational efficient, but more general #########
+    # laplacian_s = sparse_adj(laplacian_index, laplacian_weight, n_node, aggr='sum', format='coo')
+    # laplacian_d = dense_adj(laplacian_index, laplacian_weight, n_node)
 
-    evals = torch.linalg.eigh(laplacian_d).eigenvalues
-    # evals = torch.view_as_real(evals)
-    # evals = evals + eps # To avoid of zero eigenval existence
+    # # print('determinants', torch.linalg.det(laplacian_d))
 
-    lambda_max = torch.max(evals)
-    # lambda_max = lambda_max.type(torch.float32)
+    # evals = torch.linalg.eigh(laplacian_d).eigenvalues
+    # # evals = torch.view_as_real(evals)
+    # # evals = evals + eps # To avoid of zero eigenval existence
+
+    # lambda_max = torch.max(evals)
 
     id = torch.eye(n_node).to_sparse_coo().to(device)
 
