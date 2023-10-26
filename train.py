@@ -106,6 +106,9 @@ def main(args):
     train_losses = list()
     val_losses = list()
 
+    train_accs = list()
+    val_accs = list()
+
     # Training the model
     for epoch in range(args.epochs):
         model.train()
@@ -130,6 +133,9 @@ def main(args):
         train_losses.append(train_loss)
         val_losses.append(val_loss)
 
+        train_accs.append(train_acc)
+        val_accs.append(val_acc)
+
         if val_loss < min_loss:
             torch.save(model.state_dict(), 'latest.pth')
             print('Model saved at epoch {}'.format(epoch))
@@ -150,7 +156,8 @@ def main(args):
 
     # Plotting the necessary metrics
     losses = [train_losses, val_losses]
-    plotter(losses)
+    accs = [train_accs, val_accs]
+    plotter(losses, accs)
 
 
 
