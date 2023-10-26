@@ -154,7 +154,8 @@ def plotter(losses, accuracies = None):
     plt.show()
 
     if accuracies != None:
-        plt.plot(accuracies)
+        plt.plot(accuracies[0], label='training acc')
+        plt.plot(accuracies[1], label='validation acc')
         plt.title('Evaluating Accuracy')
         plt.legend()
         plt.xlabel('epochs')
