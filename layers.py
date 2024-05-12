@@ -50,7 +50,7 @@ def chebyshev(k, A):
         return lhs - rhs
 
 
-def poly_approx(K, adj, alphas, poly_fn = chebyshev):
+def poly_approx(K, adj, alphas, poly_fn = jacobi):
     '''
     Computes the polynomial approximation according to the specified polynomial function
     '''
@@ -62,7 +62,7 @@ def poly_approx(K, adj, alphas, poly_fn = chebyshev):
 
 
 class JacobiPool(torch.nn.Module):
-    def __init__(self, in_channels, ratio = 0.8, hop_num = 3, approx_func = poly_approx, conv = GATConv, non_linearity = torch.tanh):
+    def __init__(self, in_channels, ratio = 0.8, hop_num = 3, appr_funcname = 'chebyshev', approx_func = poly_approx, conv = GATConv, non_linearity = torch.tanh):
         super(JacobiPool, self).__init__()
         self.in_channels = in_channels
         self.ratio = ratio
@@ -72,6 +72,7 @@ class JacobiPool(torch.nn.Module):
         self.adj = None
         self.alphas = Parameter(torch.randn(self.K + 1))
         # self.trans = Parameter(torch.randn(in_channels, 1))
+        self.appr_funcname = appr_funcname
         self.lin = Linear(in_channels, 1)
         self.approx_func = approx_func
     
@@ -99,8 +100,13 @@ class JacobiPool(torch.nn.Module):
         self.L = laplacian_scale(laplacian_index, laplacian_weight, n_node)
         # self.L = dense_adj(self.L[0], self.L[1])
 
-        # computing k-hop of laplacian using polynomial approximation (|V| * |V|) = (N * N)
-        poly_a = self.approx_func(self.K, self.L, self.alphas)
+        # computing k-hop of laplacian using polynomial approximation, whether jacobi or chebyshev (|V| * |V|) = (N * N)
+        if self.appr_funcname == 'chebyshev':
+            poly_a = self.approx_func(self.K, self.L, self.alphas, chebyshev)
+        elif self.appr_funcname == 'jacobi':
+            poly_a = self.approx_func(self.K, self.adj, self.alphas, jacobi)
+        else:
+            raise ValueError('The specified approxiation function is not defined')
 
         # Aggregation of multi-hop attention scores.
         x_hat = self.lin(x).squeeze()
