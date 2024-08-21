@@ -2,7 +2,8 @@ import torch
 from torch.nn import Linear
 from torch.nn.parameter import Parameter
 from torch_geometric.nn import GATConv, GCNConv
-from torch_geometric.nn.pool.topk_pool import filter_adj, topk
+from torch_geometric.nn.pool.connect.filter_edges import filter_adj
+from torch_geometric.nn.pool.select.topk import topk
 from torch_geometric.utils import get_laplacian
 
 from utils import dense_adj, sparse_adj, laplacian_scale
@@ -11,6 +12,7 @@ from utils import dense_adj, sparse_adj, laplacian_scale
 def jacobi(k, A, a = 1.0, b = 1.0):
     # This is compatible with the dense matrix only
     device = A.get_device()
+    print('device dddd')
     if device == -1:
         device = 'cpu'
     if k == 0:
@@ -50,12 +52,11 @@ def chebyshev(k, A):
         return lhs - rhs
 
 
-def poly_approx(K, adj, alphas, poly_fn = jacobi):
+def poly_approx(K, adj, alphas, poly_fn = chebyshev):
     '''
     Computes the polynomial approximation according to the specified polynomial function
     '''
     polynomial = torch.zeros_like(adj).coalesce()
-    # print('polyomial shape', polynomial)
     for k in range(K + 1):
         polynomial += alphas[k] * poly_fn(k, adj)
     return polynomial

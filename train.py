@@ -21,7 +21,7 @@ def arg_parse(args = None):
     parser.add_argument('--seed', type=int, default=777, help='seed')
     parser.add_argument('--batch_size', type=int, default=4, help='batch size')
     parser.add_argument('--lr', type=float, default=0.005, help='learning rate')
-    parser.add_argument('--approx_func', type=str, default='jacobi', help='desired approximation function (e.g. jacobi, chebyshev)')
+    parser.add_argument('--approx_func', type=str, default='chebyshev', help='desired approximation function (e.g. jacobi, chebyshev)')
     parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay')
     parser.add_argument('--num_hidden', type=int, default=32, help='hidden size')
     parser.add_argument('--pooling_ratio', type=float, default=0.5, help='pooling ratio')
@@ -57,11 +57,13 @@ def test(model, loader, args):
     return correct / len(loader.dataset), loss / len(loader.dataset)
 
 def main(args):
+    # device selection
     args.device = 'cpu'
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(args.seed)
-        args.device = 'cuda:0'
+        # args.device = 'cuda:0'
+    print(f'Used device: {args.device}')
     
     # loading the dataset
     print('path:', os.path.join('data',args.dataset))
@@ -83,14 +85,14 @@ def main(args):
 
     # logger
     print("""----Data Statistics----
-                 Dataset: %s
-                 # of graphs: %d
-                 # of classes: %d
-                 # of features: %d
-                 ---------------------
-                 Train samples: %d
-                 Validation samples: %d
-                 Test samples: %d"""%(args.dataset, args.num_graphs, args.num_classes, args.num_features, len(training_set), len(validation_set), len(test_set)))
+          Dataset: %s
+          # of graphs: %d
+          # of classes: %d
+          # of features: %d
+          ---------------------
+          Train samples: %d
+          Validation samples: %d
+          Test samples: %d"""%(args.dataset, args.num_graphs, args.num_classes, args.num_features, len(training_set), len(validation_set), len(test_set)))
     
     model = Net(args).to(args.device)
     logging.info(model)

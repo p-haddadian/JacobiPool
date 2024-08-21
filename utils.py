@@ -1,7 +1,7 @@
 import torch
 from torch import Tensor
 from torch_geometric.utils import degree, is_undirected
-from torch_geometric.utils import to_torch_coo_tensor, to_torch_csr_tensor
+from torch_geometric.utils import to_torch_csr_tensor # , to_torch_coo_tensor
 from torch_geometric.utils import to_scipy_sparse_matrix
 from torch_geometric.transforms import laplacian_lambda_max
 from torch_sparse import SparseTensor
@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 
 from scipy.sparse.linalg import eigsh, eigs
 import scipy.sparse as sp
+
+from typing import Any, List, Optional, Tuple, Union
 
 class EarlyStopping:
     def __init__(self, patience=10):
@@ -36,6 +38,45 @@ class EarlyStopping:
     def save_checkpoint(self, model):
         '''Saves model when validation loss decrease.'''
         torch.save(model.state_dict(), 'es_checkpoint.pt')
+
+def to_torch_coo_tensor(
+    edge_index: Tensor,
+    edge_attr: Optional[Tensor] = None,
+    size: Optional[Union[int, Tuple[Optional[int], Optional[int]]]] = None,
+    is_coalesced: bool = False,
+) -> Tensor:
+    if size is None:
+        size = int(edge_index.max()) + 1
+
+    if isinstance(size, (tuple, list)):
+        num_src_nodes, num_dst_nodes = size
+        if num_src_nodes is None:
+            num_src_nodes = int(edge_index[0].max()) + 1
+        if num_dst_nodes is None:
+            num_dst_nodes = int(edge_index[1].max()) + 1
+        size = (num_src_nodes, num_dst_nodes)
+    else:
+        size = (size, size)
+
+    if not is_coalesced:
+        edge_index, edge_attr = coalesce(edge_index, edge_attr, max(size))
+
+    if edge_attr is None:
+        # Expanded tensors are not yet supported in all PyTorch code paths :(
+        # edge_attr = torch.ones(1, device=edge_index.device)
+        # edge_attr = edge_attr.expand(edge_index.size(1))
+        edge_attr = torch.ones(edge_index.size(1), device=edge_index.device)
+
+    adj = torch.sparse_coo_tensor(
+        indices=edge_index,
+        values=edge_attr,
+        size=tuple(size) + edge_attr.size()[1:],
+        device=edge_index.device,
+        is_coalesced=True
+    )
+    # adj = adj._coalesced_(True)
+
+    return adj
 
 def sparse_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int, aggr: str, format: str = 'coo'):
     '''
@@ -66,14 +107,14 @@ def sparse_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int, aggr: str, 
         raise ValueError('not defined aggregation function')
 
     if format == 'coo':
-        ret = to_torch_coo_tensor(edge_index, val, (n_node, n_node))
+        ret = to_torch_coo_tensor(edge_index, val, (n_node, n_node), is_coalesced=True)
     elif format == 'csr':
         ret = to_torch_csr_tensor(edge_index, val, (n_node, n_node))
     else:
         ret = SparseTensor(row= edge_index[0],
                         col= edge_index[1],
                         value= val,
-                        sparse_sizes=(n_node, n_node)).coalesce()
+                        sparse_sizes=(n_node, n_node)) #.coalesce()
     ret = ret.cuda() if edge_index.is_cuda else ret
     return ret
 
