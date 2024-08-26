@@ -19,6 +19,7 @@ def arg_parse(args = None):
     parser.add_argument('--dataset', type=str, default='DD', help='DD/PROTEINS/NCI1/NCI109/Mutagenicity')
     parser.add_argument('--epochs', type=int, default=1, help='maximum number of epochs')
     parser.add_argument('--seed', type=int, default=777, help='seed')
+    parser.add_argument('--device', type=str, default='cuda', help='device selection: cuda or cpu')
     parser.add_argument('--batch_size', type=int, default=8, help='batch size')
     parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
     parser.add_argument('--approx_func', type=str, default='jacobi', help='desired approximation function (e.g. jacobi, chebyshev)')
@@ -60,13 +61,19 @@ def test(model, loader, args):
 def main(args):
     logging.basicConfig(level=logging.INFO)
     # device selection
-    args.device = 'cpu'
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available():
-        os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-        os.environ['TORCH_USE_CUDA_DSA'] = '1'
-        torch.cuda.manual_seed(args.seed)
-        args.device = 'cuda:0'
+    if args.device == 'cpu':
+        torch.manual_seed(args.seed)
+    elif args.device == 'cuda':
+        if torch.cuda.is_available():
+            os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+            os.environ['TORCH_USE_CUDA_DSA'] = '1'
+            torch.cuda.manual_seed(args.seed)
+            args.device = 'cuda:0'
+        else:
+            print('[WARN]: No cuda device available, cpu will be used')
+            args.device = 'cpu'
+            torch.manual_seed(args.seed)
+
     print(f'[INFO]: Used device: {args.device}')
     
     # loading the dataset
