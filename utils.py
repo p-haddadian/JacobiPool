@@ -1,7 +1,7 @@
 import torch
 from torch import Tensor
 from torch_geometric.utils import degree, is_undirected
-from torch_geometric.utils import to_torch_csr_tensor # , to_torch_coo_tensor
+from torch_geometric.utils import to_torch_csr_tensor #, to_torch_coo_tensor
 from torch_geometric.utils import to_scipy_sparse_matrix
 from torch_geometric.transforms import laplacian_lambda_max
 from torch_sparse import SparseTensor
@@ -11,6 +11,7 @@ from scipy.sparse.linalg import eigsh, eigs
 import scipy.sparse as sp
 
 from typing import Any, List, Optional, Tuple, Union
+from torch_geometric.utils import coalesce, cumsum
 
 class EarlyStopping:
     def __init__(self, patience=10):
@@ -107,7 +108,7 @@ def sparse_adj(edge_index: Tensor, edge_weight: Tensor, n_node: int, aggr: str, 
         raise ValueError('not defined aggregation function')
 
     if format == 'coo':
-        ret = to_torch_coo_tensor(edge_index, val, (n_node, n_node), is_coalesced=True)
+        ret = to_torch_coo_tensor(edge_index, val, (n_node, n_node))
     elif format == 'csr':
         ret = to_torch_csr_tensor(edge_index, val, (n_node, n_node))
     else:

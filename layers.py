@@ -12,7 +12,6 @@ from utils import dense_adj, sparse_adj, laplacian_scale
 def jacobi(k, A, a = 1.0, b = 1.0):
     # This is compatible with the dense matrix only
     device = A.get_device()
-    print('device dddd')
     if device == -1:
         device = 'cpu'
     if k == 0:
