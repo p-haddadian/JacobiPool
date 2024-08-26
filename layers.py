@@ -6,7 +6,7 @@ from torch_geometric.nn.pool.connect.filter_edges import filter_adj
 from torch_geometric.nn.pool.select.topk import topk
 from torch_geometric.utils import get_laplacian
 
-from utils import dense_adj, sparse_adj, laplacian_scale
+from utils import sparse_adj, laplacian_scale
 
 
 def jacobi(k, A, a = 1.0, b = 1.0):
@@ -71,7 +71,6 @@ class JacobiPool(torch.nn.Module):
         self.K = hop_num
         self.adj = None
         self.alphas = Parameter(torch.randn(self.K + 1))
-        # self.trans = Parameter(torch.randn(in_channels, 1))
         self.appr_funcname = appr_funcname
         self.lin = Linear(in_channels, 1)
         self.approx_func = approx_func
@@ -87,9 +86,8 @@ class JacobiPool(torch.nn.Module):
 
         # Construct a weighted adjacency matrix via the attention scores assigned to each edge
         n_node = x.size(0)
-        # self.adj = dense_adj(edge_index_after, edge_attention, n_node)
+        # TODO: Is the following adjacency symetic and normalized? (D-1AD-1)?
         self.adj = sparse_adj(edge_index_after, edge_attention, n_node, aggr='sum', format='coo')
-        # print('self.adj', self.adj)
         
         # Constructing D over adjacency
         # vals = torch.sum(self.adj, dim= 1)
@@ -98,7 +96,6 @@ class JacobiPool(torch.nn.Module):
         # Constructing Laplacian using torch_geometric.utils
         laplacian_index, laplacian_weight = get_laplacian(edge_index_after, edge_attention, normalization='sym')
         self.L = laplacian_scale(laplacian_index, laplacian_weight, n_node)
-        # self.L = dense_adj(self.L[0], self.L[1])
 
         # computing k-hop of laplacian using polynomial approximation, whether jacobi or chebyshev (|V| * |V|) = (N * N)
         if self.appr_funcname == 'chebyshev':
