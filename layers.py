@@ -30,8 +30,9 @@ def jacobi(k, A, a = 1.0, b = 1.0):
         theta2_num = (k + a - 1) * (k + b - 1) * (2 * k + a + b)
         theta2_den = k * (k + a + b) * (2 * k + a + b - 2)
         theta2 = theta2_num / theta2_den
-
-        return (theta0 * A * jacobi(k - 1, A)) + (theta1 * jacobi(k - 1, A)) - (theta2 * jacobi(k - 2, A))
+        
+        temp = jacobi(k - 1, A)
+        return (theta0 * A * temp) + (theta1 * temp) - (theta2 * jacobi(k - 2, A))
 
 def chebyshev(k, A):
     '''
@@ -87,8 +88,7 @@ class JacobiPool(torch.nn.Module):
         # Construct a weighted adjacency matrix via the attention scores assigned to each edge
         n_node = x.size(0)
         # TODO: Is the following adjacency symetic and normalized? (D-1AD-1)?
-        self.adj = sparse_adj(edge_index_after, edge_attention, n_node, aggr='sum', format='coo')
-        
+        self.adj = sparse_adj(edge_index_after, edge_attention, n_node, aggr='GCN', format='coo')
         # Constructing D over adjacency
         # vals = torch.sum(self.adj, dim= 1)
         # self.D = torch.diag(vals)

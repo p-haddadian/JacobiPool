@@ -20,7 +20,7 @@ def arg_parse(args = None):
     parser.add_argument('--epochs', type=int, default=1, help='maximum number of epochs')
     parser.add_argument('--seed', type=int, default=777, help='seed')
     parser.add_argument('--device', type=str, default='cuda', help='device selection: cuda or cpu')
-    parser.add_argument('--batch_size', type=int, default=8, help='batch size')
+    parser.add_argument('--batch_size', type=int, default=4 , help='batch size')
     parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
     parser.add_argument('--approx_func', type=str, default='jacobi', help='desired approximation function (e.g. jacobi, chebyshev)')
     parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay')
@@ -65,8 +65,8 @@ def main(args):
         torch.manual_seed(args.seed)
     elif args.device == 'cuda':
         if torch.cuda.is_available():
-            os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-            os.environ['TORCH_USE_CUDA_DSA'] = '1'
+            # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+            # os.environ['TORCH_USE_CUDA_DSA'] = '1'
             torch.cuda.manual_seed(args.seed)
             args.device = 'cuda:0'
         else:
@@ -87,7 +87,7 @@ def main(args):
     num_training = int(len(dataset)*0.8)
     num_val = int(len(dataset)*0.1)
     num_test = len(dataset) - (num_training+num_val)
-    training_set,validation_set,test_set = random_split(dataset,[num_training,num_val,num_test])
+    training_set, validation_set, test_set = random_split(dataset,[num_training,num_val,num_test])
 
     # dataloader
     train_loader = DataLoader(training_set, batch_size=args.batch_size, shuffle=True)
