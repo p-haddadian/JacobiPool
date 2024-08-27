@@ -142,7 +142,7 @@ def main(args):
             optimizer.step()
             optimizer.zero_grad()
         val_acc, val_loss = test(model, val_loader, args)
-        train_loss = loss_all / len(train_loader)
+        train_loss = loss_all / len(train_loader.dataset)
         print('Epoch: {0} | Train Loss: {1:.4f} | Val Loss: {2:.4f} | Val Acc: {3:.4f}'.format(epoch, train_loss, val_loss, val_acc))
 
         train_losses.append(train_loss)
