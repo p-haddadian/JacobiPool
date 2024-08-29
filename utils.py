@@ -228,6 +228,10 @@ def sample_dataset(dataset, sample_size, random_state = 42):
     # for verification
     # print("Full dataset class distribution:", class_counts)
 
+    # in case of fraction
+    if sample_size > 0.0 and sample_size < 1.0:
+        sample_size = int(len(dataset) * sample_size)
+
     # stratified sampling based on class distribution
     stratified_split = StratifiedShuffleSplit(n_splits=1, train_size=sample_size, random_state=random_state)
     train_indices, _ = next(stratified_split.split(np.zeros(len(labels)), labels))
