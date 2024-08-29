@@ -42,12 +42,12 @@ class EarlyStopping:
 
 class ModelSaveCallback:
     def __init__(self) -> None:
-        self.best_model = None
+        self.best_model_state_dict = None
         self.stats = None
 
     def __call__(self, study, trial):
         if study.best_trial == trial:
-            self.best_model = trial.user_attrs['model']
+            self.best_model_state_dict = trial.user_attrs['model_state_dict']
             self.best_stats = trial.user_attrs['stats']
 
 # Custom callback to save the best model

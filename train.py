@@ -120,7 +120,7 @@ def model_train(args, train_loader, val_loader):
     stats['val_losses'] = val_losses
     stats['train_accs'] = train_accs
     stats['val_accs'] = val_accs
-    return model, stats
+    return model.state_dict(), stats
 
 # Hyperparameter tunning based on Optuna
 def objective(trial: optuna.Trial, args, train_loader, val_loader):
@@ -133,10 +133,10 @@ def objective(trial: optuna.Trial, args, train_loader, val_loader):
     args.hop_num = trial.suggest_categorical('hop_num', [3, 4])
 
     # Train the model
-    model, stats = model_train(args, train_loader, val_loader)
+    model_state_dict, stats = model_train(args, train_loader, val_loader)
 
     score = torch.tensor(stats['val_accs']).mean().item()
-    trial.set_user_attr('model', model)
+    trial.set_user_attr('model_state_dict', model_state_dict)
     trial.set_user_attr('stats', stats)
 
     return score
@@ -152,8 +152,12 @@ def run_optimization(args, train_loader, val_loader):
     print("Best hyperparameters: ", study.best_params)
     print("Best validation accuracy: ", study.best_value)
 
-    model = model_save_callback.best_model
+    model_state_dict = model_save_callback.best_model_state_dict
     stats = model_save_callback.best_stats
+
+    # Load the best model state_dict into a new model instance
+    model = Net(args).to(args.device)
+    model.load_state_dict(model_state_dict)
 
     return model, stats
 
@@ -208,7 +212,9 @@ def main(args):
     if args.hyptune:
         model, stats = run_optimization(args, train_loader, val_loader)
     else:
-        model, stats = model_train(args, train_loader, val_loader)
+        model_state_dict, stats = model_train(args, train_loader, val_loader)
+        model = Net(args).to(args.device)
+        model.load_state_dict(model_state_dict)
     
     # Testing the model
     model.load_state_dict(torch.load('latest.pth'))
