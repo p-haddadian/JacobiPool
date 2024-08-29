@@ -40,6 +40,17 @@ class EarlyStopping:
         '''Saves model when validation loss decrease.'''
         torch.save(model.state_dict(), 'es_checkpoint.pt')
 
+class ModelSaveCallback:
+    def __init__(self) -> None:
+        self.best_model = None
+        self.stats = None
+
+    def __call__(self, study, trial):
+        if study.best_trial == trial:
+            self.best_model = trial.user_attrs['model']
+            self.best_stats = trial.user_attrs['stats']
+
+# Custom callback to save the best model
 def to_torch_coo_tensor(
     edge_index: Tensor,
     edge_attr: Optional[Tensor] = None,

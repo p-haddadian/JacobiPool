@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import optuna
 
 import torch
 import torch.nn.functional as F
@@ -10,7 +11,7 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
 
 from networks import Net
-from utils import EarlyStopping
+from utils import EarlyStopping, ModelSaveCallback
 from utils import plotter
 
 
@@ -33,6 +34,7 @@ def arg_parse(args = None):
     parser.add_argument('--early_stop', default=False, help="indicates whether to use early stop or not")
     parser.add_argument('--patience', type=int, default=50, help='patience for earlystopping')
     parser.add_argument('--verbose', type=int, default=1, help='level of verbosity: 0: Just the important outputs, 1: Partial verbosity including model training per epoch, 2: Complete verbosity and printing all INFOs')
+    parser.add_argument('--hyptune', type=bool, default=True, help='whether you want Optuna find the best hyperparameters')
     args = parser.parse_args(args)
     return args
 
@@ -120,6 +122,41 @@ def model_train(args, train_loader, val_loader):
     stats['val_accs'] = val_accs
     return model, stats
 
+# Hyperparameter tunning based on Optuna
+def objective(trial: optuna.Trial, args, train_loader, val_loader):
+    # Hyperparametrs to tune
+    args.num_hidden = trial.suggest_categorical('num_hidden', [16, 32])
+    args.lr = trial.suggest_categorical('lr', [0.01, 0.001])
+    args.weight_decay = trial.suggest_categorical('weight_decay', [0.01, 0.0001])
+    args.pooling_ratio = trial.suggest_categorical('pooling_ratio', [0.25, 0.5])
+    args.dropout_ratio = trial.suggest_categorical('dropout_ratio', [0.2])
+    args.hop_num = trial.suggest_categorical('hop_num', [3, 4])
+
+    # Train the model
+    model, stats = model_train(args, train_loader, val_loader)
+
+    score = torch.mean(stats['val_accs']).item()
+    trial.set_user_attr('model', model)
+    trial.set_user_attr('stats', stats)
+
+    return score
+
+# create and run the optuna study
+def run_optimization(args, train_loader, val_loader):
+    model_save_callback = ModelSaveCallback()
+
+    study = optuna.create_study(direction='maximize')
+    study.optimize(lambda trial: objective(trial, args, train_loader, val_loader), n_trials=10, callbacks=[model_save_callback])
+
+    # Print best hyperparameters and model
+    print("Best hyperparameters: ", study.best_params)
+    print("Best validation accuracy: ", study.best_value)
+
+    model = model_save_callback.best_model
+    stats = model_save_callback.best_stats
+
+    return model, stats
+
 def main(args):
     logging.basicConfig(level=logging.INFO)
     # device selection
@@ -168,7 +205,10 @@ def main(args):
           Test samples: %d"""%(args.dataset, args.num_graphs, args.num_classes, args.num_features, len(training_set), len(validation_set), len(test_set)))
     
     # Model construction
-    model, stats = model_train(args, train_loader, val_loader)
+    if args.hyptune:
+        model, stats = run_optimization(args, train_loader, val_loader)
+    else:
+        model, stats = model_train(args, train_loader, val_loader)
     
     # Testing the model
     model.load_state_dict(torch.load('latest.pth'))
