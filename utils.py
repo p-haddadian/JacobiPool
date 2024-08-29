@@ -1,5 +1,6 @@
 import torch
 from torch import Tensor
+from torch.utils.data import Subset
 from torch_geometric.utils import degree, is_undirected
 from torch_geometric.utils import to_torch_csr_tensor #, to_torch_coo_tensor
 from torch_geometric.utils import to_scipy_sparse_matrix
@@ -12,6 +13,10 @@ import scipy.sparse as sp
 
 from typing import Any, List, Optional, Tuple, Union
 from torch_geometric.utils import coalesce, cumsum
+
+import numpy as np
+from collections import Counter
+from sklearn.model_selection import StratifiedShuffleSplit
 
 class EarlyStopping:
     def __init__(self, patience=10):
@@ -195,7 +200,7 @@ def laplacian_scale(laplacian_index: Tensor, laplacian_weight: Tensor, n_node: i
     scaled_laplacian = torch.div(torch.mul(laplacian_s, 2), lambda_max) - id
     return scaled_laplacian
 
-
+# Plot the loss and accuracy based on validation and training
 def plotter(losses, accuracies = None):
     plt.plot(losses[0], label='training loss')
     plt.plot(losses[1], label='validation loss')
@@ -215,3 +220,23 @@ def plotter(losses, accuracies = None):
         plt.ylabel('accuracy')
         plt.savefig('plot-acc.png')
         plt.show()
+
+def sample_dataset(dataset, sample_size, random_state = 42):
+    labels = np.array([data.y.item() for data in dataset])
+    class_counts = Counter(labels)
+
+    # for verification
+    # print("Full dataset class distribution:", class_counts)
+
+    # stratified sampling based on class distribution
+    stratified_split = StratifiedShuffleSplit(n_splits=1, train_size=sample_size, random_state=random_state)
+    train_indices, _ = next(stratified_split.split(np.zeros(len(labels)), labels))
+
+    # Verify the subset class distribution
+    subset_labels = np.array([dataset[idx].y.item() for idx in train_indices])
+    subset_class_counts = Counter(subset_labels)
+    # print("Subset class distribution:", subset_class_counts)
+
+    subset = Subset(dataset, train_indices)
+
+    return subset

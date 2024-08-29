@@ -12,7 +12,7 @@ from torch_geometric.datasets import TUDataset
 
 from networks import Net
 from utils import EarlyStopping, ModelSaveCallback
-from utils import plotter
+from utils import plotter, sample_dataset
 
 
 def arg_parse(args = None):
@@ -35,6 +35,7 @@ def arg_parse(args = None):
     parser.add_argument('--patience', type=int, default=50, help='patience for earlystopping')
     parser.add_argument('--verbose', type=int, default=1, help='level of verbosity: 0: Just the important outputs, 1: Partial verbosity including model training per epoch, 2: Complete verbosity and printing all INFOs')
     parser.add_argument('--hyptune', type=bool, default=True, help='whether you want Optuna find the best hyperparameters')
+    parser.add_argument('--sample_size', type=int, default=-1, help='if want to train on a subset of dataset, specify the number of samples')
     args = parser.parse_args(args)
     return args
 
@@ -182,6 +183,11 @@ def main(args):
     # loading the dataset
     print('[INFO]: Path:', os.path.join('data',args.dataset))
     dataset = TUDataset(os.path.join('data', args.dataset), name=args.dataset)
+
+    # in case of sampling
+    if args.sample_size != -1:
+        dataset = sample_dataset(dataset, args.sample_size, args.seed)
+        
     args.num_classes = dataset.num_classes
     args.num_features = dataset.num_features
     args.num_graphs = len(dataset)
