@@ -135,7 +135,7 @@ def objective(trial: optuna.Trial, args, train_loader, val_loader):
     # Train the model
     model, stats = model_train(args, train_loader, val_loader)
 
-    score = torch.mean(stats['val_accs']).item()
+    score = torch.tensor(stats['val_accs']).mean().item()
     trial.set_user_attr('model', model)
     trial.set_user_attr('stats', stats)
 
