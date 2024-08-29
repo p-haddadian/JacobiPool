@@ -46,7 +46,7 @@ class ModelSaveCallback:
         self.stats = None
 
     def __call__(self, study, trial):
-        if study.best_trial == trial:
+        if study.best_trial.number == trial.number:
             self.best_model_state_dict = trial.user_attrs['model_state_dict']
             self.best_stats = trial.user_attrs['stats']
 
