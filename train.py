@@ -58,6 +58,68 @@ def test(model, loader, args):
         loss += loss_fcn(out, data.y).item()
     return correct / len(loader.dataset), loss / len(loader.dataset)
 
+def model_train(args, train_loader, val_loader):
+    model = Net(args).to(args.device)
+    print(f'[INFO]: Model architecture:\n{model}')
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    loss_fcn = torch.nn.CrossEntropyLoss()
+
+    min_loss = 1e10
+    patience = 0
+
+    stats = {}
+    train_losses = list()
+    val_losses = list()
+
+    train_accs = list()
+    val_accs = list()
+
+    # Training the model
+    for epoch in range(args.epochs):
+        model.train()
+        correct = 0
+        loss_all =0
+        for i, data in enumerate(train_loader):
+            data = data.to(args.device)
+            out = model(data)
+            loss = loss_fcn(out, data.y)
+            pred = out.max(dim=1)[1]
+            correct += pred.eq(data.y).sum().item()
+            loss_all += loss.item()
+            train_acc = correct / len(train_loader.dataset)
+            if args.verbose == 2:
+                print('Training Loss: {0:.4f}| Training Acc: {1:.4f}'.format(loss, train_acc))
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+        val_acc, val_loss = test(model, val_loader, args)
+        train_loss = loss_all / len(train_loader.dataset)
+        print('Epoch: {0} | Train Loss: {1:.4f} | Val Loss: {2:.4f} | Val Acc: {3:.4f}'.format(epoch, train_loss, val_loss, val_acc))
+
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
+
+        train_accs.append(train_acc)
+        val_accs.append(val_acc)
+
+        if val_loss < min_loss:
+            torch.save(model.state_dict(), 'latest.pth')
+            print('Model saved at epoch {}'.format(epoch))
+            min_loss = val_loss
+            patience = 0
+        else:
+            patience += 1
+        
+        if patience > args.patience:
+            print('Maximum patience reached at epoch {} and val loss had no change'.format(epoch))
+            break
+    stats['train_losses'] = train_losses
+    stats['val_losses'] = val_losses
+    stats['train_accs'] = train_accs
+    stats['val_accs'] = val_accs
+    return model, stats
+
 def main(args):
     logging.basicConfig(level=logging.INFO)
     # device selection
@@ -106,62 +168,7 @@ def main(args):
           Test samples: %d"""%(args.dataset, args.num_graphs, args.num_classes, args.num_features, len(training_set), len(validation_set), len(test_set)))
     
     # Model construction
-    model = Net(args).to(args.device)
-    print(f'[INFO]: Model architecture:\n{model}')
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    
-    if args.early_stop:
-        stopper = EarlyStopping(args.patience)
-    loss_fcn = torch.nn.CrossEntropyLoss()
-
-    min_loss = 1e10
-    patience = 0
-
-    train_losses = list()
-    val_losses = list()
-
-    train_accs = list()
-    val_accs = list()
-
-    # Training the model
-    for epoch in range(args.epochs):
-        model.train()
-        correct = 0
-        loss_all =0
-        for i, data in enumerate(train_loader):
-            data = data.to(args.device)
-            out = model(data)
-            loss = loss_fcn(out, data.y)
-            pred = out.max(dim=1)[1]
-            correct += pred.eq(data.y).sum().item()
-            loss_all += loss.item()
-            train_acc = correct / len(train_loader.dataset)
-            if args.verbose == 2:
-                print('Training Loss: {0:.4f}| Training Acc: {1:.4f}'.format(loss, train_acc))
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-        val_acc, val_loss = test(model, val_loader, args)
-        train_loss = loss_all / len(train_loader.dataset)
-        print('Epoch: {0} | Train Loss: {1:.4f} | Val Loss: {2:.4f} | Val Acc: {3:.4f}'.format(epoch, train_loss, val_loss, val_acc))
-
-        train_losses.append(train_loss)
-        val_losses.append(val_loss)
-
-        train_accs.append(train_acc)
-        val_accs.append(val_acc)
-
-        if val_loss < min_loss:
-            torch.save(model.state_dict(), 'latest.pth')
-            print('Model saved at epoch {}'.format(epoch))
-            min_loss = val_loss
-            patience = 0
-        else:
-            patience += 1
-        
-        if patience > args.patience:
-            print('Maximum patience reached at epoch {} and val loss had no change'.format(epoch))
-            break
+    model, stats = model_train(args, train_loader, val_loader)
     
     # Testing the model
     model.load_state_dict(torch.load('latest.pth'))
@@ -170,8 +177,8 @@ def main(args):
     print('Test loss: {0:.4f} | Test Acc: {1:.4f}'.format(test_loss, test_acc))
 
     # Plotting the necessary metrics
-    losses = [train_losses, val_losses]
-    accs = [train_accs, val_accs]
+    losses = [stats['train_losses'], stats['val_losses']]
+    accs = [stats['train_accs'], stats['val_accs']]
     plotter(losses, accs)
 
 
