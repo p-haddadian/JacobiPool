@@ -19,15 +19,23 @@ class Net(torch.nn.Module):
         self.dropout_ratio = args.dropout_ratio
         self.hop_num = args.hop_num
         self.appr_funcname = args.approx_func
+        if args.a:
+            self.a = args.a
+        else:
+            self.a = 1.0
+        if args.b:
+            self.b = args.b
+        else:
+            self.b = 1.0
 
         self.conv1 = GCNConv(self.num_features, self.hidden)
-        self.pool1 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname)
+        self.pool1 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, self.a, self.b)
 
         self.conv2 = GCNConv(self.hidden, self.hidden)
-        self.pool2 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname)
+        self.pool2 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, self.a, self.b)
 
         self.conv3 = GCNConv(self.hidden, self.hidden)
-        self.pool3 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname)
+        self.pool3 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, self.a, self.b)
 
         self.lin1 = Linear(self.hidden * 2, self.hidden)
         self.lin2 = Linear(self.hidden, self.hidden // 2)

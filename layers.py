@@ -52,18 +52,29 @@ def chebyshev(k, A):
         return lhs - rhs
 
 
-def poly_approx(K, adj, alphas, poly_fn = chebyshev):
+def poly_approx(K, adj, alphas, poly_fn = chebyshev, **kwargs):
     '''
     Computes the polynomial approximation according to the specified polynomial function
     '''
+    if poly_fn == jacobi:
+        for key, val in kwargs.items():
+            if key == 'a':
+                a = val
+            elif key == 'b':
+                b = val
+
     polynomial = torch.zeros_like(adj).coalesce()
-    for k in range(K + 1):
-        polynomial += alphas[k] * poly_fn(k, adj)
+    if poly_fn == jacobi:
+        for k in range(K + 1):
+            polynomial += alphas[k] * poly_fn(k, adj, a, b)
+    else:
+        for k in range(K + 1):
+            polynomial += alphas[k] * poly_fn(k, adj)
     return polynomial
 
 
 class JacobiPool(torch.nn.Module):
-    def __init__(self, in_channels, ratio = 0.8, hop_num = 3, appr_funcname = 'chebyshev', approx_func = poly_approx, conv = GATConv, non_linearity = torch.tanh):
+    def __init__(self, in_channels, ratio = 0.8, hop_num = 3, appr_funcname = 'chebyshev', a = 1.0, b = 1.0, approx_func = poly_approx, conv = GATConv, non_linearity = torch.tanh):
         super(JacobiPool, self).__init__()
         self.in_channels = in_channels
         self.ratio = ratio
@@ -75,6 +86,8 @@ class JacobiPool(torch.nn.Module):
         self.appr_funcname = appr_funcname
         self.lin = Linear(in_channels, 1)
         self.approx_func = approx_func
+        self.a = a
+        self.b = b
     
     def forward(self, x, edge_index, edge_attr = None, batch = None):
         if batch is None:
@@ -87,7 +100,6 @@ class JacobiPool(torch.nn.Module):
 
         # Construct a weighted adjacency matrix via the attention scores assigned to each edge
         n_node = x.size(0)
-        # TODO: Is the following adjacency symetic and normalized? (D-1AD-1)?
         self.adj = sparse_adj(edge_index_after, edge_attention, n_node, aggr='GCN', format='coo')
         # Constructing D over adjacency
         # vals = torch.sum(self.adj, dim= 1)
@@ -101,7 +113,7 @@ class JacobiPool(torch.nn.Module):
         if self.appr_funcname == 'chebyshev':
             poly_a = self.approx_func(self.K, self.L, self.alphas, chebyshev)
         elif self.appr_funcname == 'jacobi':
-            poly_a = self.approx_func(self.K, self.adj, self.alphas, jacobi)
+            poly_a = self.approx_func(self.K, self.adj, self.alphas, jacobi, a=self.a, b=self.b)
         else:
             raise ValueError('The specified approxiation function is not defined')
 
