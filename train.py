@@ -146,10 +146,17 @@ def objective(trial: optuna.Trial, args, train_loader, val_loader):
 
 # create and run the optuna study
 def run_optimization(args, train_loader, val_loader):
+    if args.colab:
+        from google.colab import drive
+        drive.mount('/content/drive')
+        storage_path = 'sqlite:////content/drive/My Drive/optuna_study.db'
+    else:
+        storage_path = 'optuna_study.db'
+    
     model_save_callback = ModelSaveCallback()
 
-    study = optuna.create_study(direction='maximize')
-    study.optimize(lambda trial: objective(trial, args, train_loader, val_loader), n_trials=10, callbacks=[model_save_callback])
+    study = optuna.create_study(direction='maximize', study_name='Jacobi 2nd', storage=storage_path, load_if_exists=True)
+    study.optimize(lambda trial: objective(trial, args, train_loader, val_loader), n_trials=100, n_jobs=-1, callbacks=[model_save_callback])
 
     # Print best hyperparameters and model
     print("Best hyperparameters: ", study.best_params)
