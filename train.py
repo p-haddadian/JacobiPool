@@ -35,7 +35,7 @@ def arg_parse(args = None):
     parser.add_argument('--patience', type=int, default=50, help='patience for earlystopping')
     parser.add_argument('--verbose', type=int, default=1, help='level of verbosity: 0: Just the important outputs, 1: Partial verbosity including model training per epoch, 2: Complete verbosity and printing all INFOs')
     parser.add_argument('--hyptune', type=bool, default=True, help='whether you want Optuna find the best hyperparameters')
-    parser.add_argument('--sample_size', type=int, default=-1, help='if want to train on a subset of dataset, specify the number of samples')
+    parser.add_argument('--sample_size', type=float, default=-1, help='if want to train on a subset of dataset, specify the number of samples')
     parser.add_argument('--colab', type=bool, default=True, help='Indicate whether you are using Google Colab')
     args = parser.parse_args(args)
     return args
