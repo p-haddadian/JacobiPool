@@ -196,13 +196,14 @@ def main(args):
     dataset = TUDataset(os.path.join('data', args.dataset), name=args.dataset)
 
     # in case of sampling
-    if args.sample_size != -1:
-        dataset = sample_dataset(dataset, args.sample_size, args.seed)
         
     args.num_classes = dataset.num_classes
     args.num_features = dataset.num_features
     args.num_graphs = len(dataset)
 
+    if args.sample_size != -1:
+        dataset = sample_dataset(dataset, args.sample_size, args.seed)
+        
     # data spliting
     num_training = int(len(dataset)*0.8)
     num_val = int(len(dataset)*0.1)
