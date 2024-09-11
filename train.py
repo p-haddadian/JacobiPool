@@ -127,14 +127,14 @@ def model_train(args, train_loader, val_loader):
 # Hyperparameter tunning based on Optuna
 def objective(trial: optuna.Trial, args, train_loader, val_loader):
     # Hyperparametrs to tune
-    args.num_hidden = trial.suggest_categorical('num_hidden', [32, 64])
-    args.lr = trial.suggest_categorical('lr', [0.005, 0.001, 0.0005])
+    args.num_hidden = trial.suggest_categorical('num_hidden', [32, 64, 128])
+    args.lr = trial.suggest_categorical('lr', [0.001, 0.0005, 0.0001])
     args.weight_decay = trial.suggest_categorical('weight_decay', [0.0001, 0.00005])
     args.pooling_ratio = trial.suggest_categorical('pooling_ratio', [0.25, 0.35, 0.5])
     args.dropout_ratio = trial.suggest_categorical('dropout_ratio', [0.2])
     args.hop_num = trial.suggest_categorical('hop_num', [2, 3, 4])
     args.a = trial.suggest_float('a', -1.0, 2.0, step=0.5)
-    args.b = trial.suggest_float('b', -1.0, 2.0, step=0.5)
+    args.b = trial.suggest_float('b', -0.5, 2.0, step=0.5)
 
     # Train the model
     model_state_dict, stats = model_train(args, train_loader, val_loader)
@@ -148,15 +148,16 @@ def objective(trial: optuna.Trial, args, train_loader, val_loader):
 # create and run the optuna study
 def run_optimization(args, train_loader, val_loader):
     if args.colab:
-        from google.colab import drive
-        drive.mount('/content/drive')
+        # from google.colab import drive
+        # drive.mount('/content/drive')
+        #  TODO: Tensor files is not JSON Serializable
         storage_path = 'sqlite:////content/drive/My Drive/optuna_study.db'
     else:
         storage_path = 'optuna_study.db'
     
     model_save_callback = ModelSaveCallback()
 
-    study = optuna.create_study(direction='maximize', study_name='Jacobi 2nd', storage=storage_path, load_if_exists=True)
+    study = optuna.create_study(direction='maximize', study_name='Jacobi 2nd', load_if_exists=True)
     study.optimize(lambda trial: objective(trial, args, train_loader, val_loader), n_trials=100, n_jobs=-1, callbacks=[model_save_callback])
 
     # Print best hyperparameters and model
