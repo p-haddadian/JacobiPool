@@ -183,7 +183,7 @@ def main(args):
             # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
             # os.environ['TORCH_USE_CUDA_DSA'] = '1'
             torch.cuda.manual_seed(args.seed)
-            args.device = 'cuda:0'
+            args.device = 'cuda'
         else:
             print('[WARN]: No cuda device available, cpu will be used')
             args.device = 'cpu'
