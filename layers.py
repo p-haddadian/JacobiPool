@@ -106,8 +106,8 @@ class JacobiPool(torch.nn.Module):
         # self.D = torch.diag(vals)
 
         # Constructing Laplacian using torch_geometric.utils
-        laplacian_index, laplacian_weight = get_laplacian(edge_index_after, edge_attention, normalization='sym')
-        self.L = laplacian_scale(laplacian_index, laplacian_weight, n_node)
+        # laplacian_index, laplacian_weight = get_laplacian(edge_index_after, edge_attention, normalization='sym')
+        # self.L = laplacian_scale(laplacian_index, laplacian_weight, n_node)
 
         # computing k-hop of laplacian using polynomial approximation, whether jacobi or chebyshev (|V| * |V|) = (N * N)
         if self.appr_funcname == 'chebyshev':
