@@ -139,6 +139,7 @@ def objective(trial: optuna.Trial, args, train_loader, val_loader):
     # Train the model
     model_state_dict, stats = model_train(args, train_loader, val_loader)
 
+    # Objective is the mean on all val_accs in that study
     score = torch.tensor(stats['val_accs']).mean().item()
     trial.set_user_attr('model_state_dict', model_state_dict)
     trial.set_user_attr('stats', stats)
