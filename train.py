@@ -5,10 +5,13 @@ import optuna
 
 import torch
 import torch.nn.functional as F
-from torch.utils.data import random_split
+from torch.utils.data import random_split, Subset
+from torch import GradScaler, autocast
 from torch_geometric import utils
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
+from sklearn.model_selection import KFold
+
 
 from networks import Net
 from utils import EarlyStopping, ModelSaveCallback
@@ -64,6 +67,10 @@ def test(model, loader, args):
 
 def model_train(args, train_loader, val_loader):
     model = Net(args).to(args.device)
+
+    # Multi-GPU model configuration
+    if args.device != 'cpu':
+        model = torch.nn.DataParallel(model)
     print(f'[INFO]: Model architecture:\n{model}')
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -94,6 +101,7 @@ def model_train(args, train_loader, val_loader):
             train_acc = correct / len(train_loader.dataset)
             if args.verbose == 2:
                 print('Training Loss: {0:.4f}| Training Acc: {1:.4f}'.format(loss, train_acc))
+
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
