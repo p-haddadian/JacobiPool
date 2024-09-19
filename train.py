@@ -68,9 +68,6 @@ def test(model, loader, args):
 def model_train(args, train_loader, val_loader):
     model = Net(args).to(args.device)
 
-    # Multi-GPU model configuration
-    if args.device != 'cpu':
-        model = torch.nn.DataParallel(model)
     print(f'[INFO]: Model architecture:\n{model}')
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
