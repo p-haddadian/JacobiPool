@@ -6,9 +6,12 @@ from torch_geometric.nn.pool.connect.filter_edges import filter_adj
 from torch_geometric.nn.pool.select.topk import topk
 from torch_geometric.utils import get_laplacian
 
+from functools import lru_cache
+
 from utils import sparse_adj, laplacian_scale
 
 
+@lru_cache(None)
 def jacobi(k, A, a = 1.0, b = 1.0):
     # This is compatible with the dense matrix only
     device = A.get_device()
