@@ -202,23 +202,33 @@ def laplacian_scale(laplacian_index: Tensor, laplacian_weight: Tensor, n_node: i
 
 # Plot the loss and accuracy based on validation and training
 def plotter(losses, accuracies = None):
-    plt.plot(losses[0], label='training loss')
-    plt.plot(losses[1], label='validation loss')
-    plt.title('Evaluating Loss')
-    plt.legend()
-    plt.xlabel('epochs')
-    plt.ylabel('loss')
+    plt.style.use('ggplot')
+
+    plt.figure()
+    plt.plot(losses[0], label='Training loss', linewidth=2, marker='o', markersize=5)
+    plt.plot(losses[1], label='Validation loss', linewidth=2, marker='s', markersize=5)
+    plt.title('Evaluating Loss', fontsize=14)
+    plt.legend(frameon=False, fontsize=10)
+    plt.xlabel('Epochs', fontsize=12)
+    plt.ylabel('Loss', fontsize=12)
+    plt.grid(True)
+    plt.tight_layout()
     plt.savefig('plot-loss.png')
+    plt.savefig('plot-loss.svg', format='svg')
     plt.show()
 
-    if accuracies != None:
-        plt.plot(accuracies[0], label='training acc')
-        plt.plot(accuracies[1], label='validation acc')
-        plt.title('Evaluating Accuracy')
-        plt.legend()
-        plt.xlabel('epochs')
-        plt.ylabel('accuracy')
+    if accuracies is not None:
+        plt.figure()
+        plt.plot(accuracies[0], label='Training Acc.', linewidth=2, marker='o', markersize=5)
+        plt.plot(accuracies[1], label='Validation Acc.', linewidth=2, marker='s', markersize=5)
+        plt.title('Evaluating Accuracy', fontsize=14)
+        plt.legend(frameon=False, fontsize=10)
+        plt.xlabel('Epochs', fontsize=12)
+        plt.ylabel('Accuracy', fontsize=12)
+        plt.grid(True)
+        plt.tight_layout()
         plt.savefig('plot-acc.png')
+        plt.savefig('plot-acc.svg', format='svg')
         plt.show()
 
 def sample_dataset(dataset, sample_size, random_state = 42):
