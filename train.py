@@ -40,6 +40,8 @@ def arg_parse(args = None):
     parser.add_argument('--hyptune', type=bool, default=True, help='whether you want Optuna find the best hyperparameters')
     parser.add_argument('--sample_size', type=float, default=-1, help='if want to train on a subset of dataset, specify the number of samples')
     parser.add_argument('--colab', type=bool, default=True, help='Indicate whether you are using Google Colab')
+    parser.add_argument('--a', type=float, default=1.0, help='Jacobi hyperparameter a')
+    parser.add_argument('--b', type=float, default=1.0, help='Jacobi hyperparameter b')
     args = parser.parse_args(args)
     return args
 
