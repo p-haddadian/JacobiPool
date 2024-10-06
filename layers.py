@@ -104,13 +104,6 @@ class JacobiPool(torch.nn.Module):
         # Construct a weighted adjacency matrix via the attention scores assigned to each edge
         n_node = x.size(0)
         self.adj = sparse_adj(edge_index_after, edge_attention, n_node, aggr='GCN', format='coo')
-        # Constructing D over adjacency
-        # vals = torch.sum(self.adj, dim= 1)
-        # self.D = torch.diag(vals)
-
-        # Constructing Laplacian using torch_geometric.utils
-        # laplacian_index, laplacian_weight = get_laplacian(edge_index_after, edge_attention, normalization='sym')
-        # self.L = laplacian_scale(laplacian_index, laplacian_weight, n_node)
 
         # computing k-hop of laplacian using polynomial approximation, whether jacobi or chebyshev (|V| * |V|) = (N * N)
         if self.appr_funcname == 'chebyshev':

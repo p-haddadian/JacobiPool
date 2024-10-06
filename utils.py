@@ -202,7 +202,7 @@ def laplacian_scale(laplacian_index: Tensor, laplacian_weight: Tensor, n_node: i
 
 # Plot the loss and accuracy based on validation and training
 def plotter(losses, accuracies = None):
-    plt.style.use('ggplot')
+    plt.style.use('fivethirtyeight')
 
     plt.figure()
     plt.plot(losses[0], label='Training loss', linewidth=2, marker='o', markersize=5)
