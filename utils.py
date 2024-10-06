@@ -205,8 +205,8 @@ def plotter(losses, accuracies = None):
     plt.style.use('fivethirtyeight')
 
     plt.figure()
-    plt.plot(losses[0], label='Training loss', linewidth=2, marker='o', markersize=5)
-    plt.plot(losses[1], label='Validation loss', linewidth=2, marker='s', markersize=5)
+    plt.plot(losses[0], label='Training loss', linewidth=2, marker='o', markersize=4)
+    plt.plot(losses[1], label='Validation loss', linewidth=2, marker='s', markersize=4)
     plt.title('Evaluating Loss', fontsize=14)
     plt.legend(frameon=False, fontsize=10)
     plt.xlabel('Epochs', fontsize=12)
@@ -219,8 +219,8 @@ def plotter(losses, accuracies = None):
 
     if accuracies is not None:
         plt.figure()
-        plt.plot(accuracies[0], label='Training Acc.', linewidth=2, marker='o', markersize=5)
-        plt.plot(accuracies[1], label='Validation Acc.', linewidth=2, marker='s', markersize=5)
+        plt.plot(accuracies[0], label='Training Acc.', linewidth=2, marker='o', markersize=4)
+        plt.plot(accuracies[1], label='Validation Acc.', linewidth=2, marker='s', markersize=4)
         plt.title('Evaluating Accuracy', fontsize=14)
         plt.legend(frameon=False, fontsize=10)
         plt.xlabel('Epochs', fontsize=12)
