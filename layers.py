@@ -14,7 +14,7 @@ from utils import sparse_adj, laplacian_scale
 @lru_cache()
 def jacobi(k, A, a = 1.0, b = 1.0):
     # This is compatible with the dense matrix only
-    epsilon = 0.0001
+    epsilon = 0.00001
     device = A.get_device()
     if device == -1:
         device = 'cpu'
