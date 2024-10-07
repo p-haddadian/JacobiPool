@@ -14,6 +14,7 @@ from utils import sparse_adj, laplacian_scale
 @lru_cache()
 def jacobi(k, A, a = 1.0, b = 1.0):
     # This is compatible with the dense matrix only
+    epsilon = 0.0001
     device = A.get_device()
     if device == -1:
         device = 'cpu'
@@ -23,15 +24,15 @@ def jacobi(k, A, a = 1.0, b = 1.0):
         return (((a - b) / 2) + ((a + b + 2) / 2)) * A
     else:
         theta0_num = (2 * k + a + b) * (2 * k + a + b - 1)
-        theta0_den = 2 * k * (k + a + b)
+        theta0_den = 2 * k * (k + a + b) + epsilon
         theta0 = theta0_num / theta0_den
 
         theta1_num = (2 * k + a + b - 1) * (a**2 - b**2)
-        theta1_den = (2 * k) * (k + a + b) * (2 * k + a + b - 2)
+        theta1_den = (2 * k) * (k + a + b) * (2 * k + a + b - 2) + epsilon
         theta1 = theta1_num / theta1_den
 
         theta2_num = (k + a - 1) * (k + b - 1) * (2 * k + a + b)
-        theta2_den = k * (k + a + b) * (2 * k + a + b - 2)
+        theta2_den = k * (k + a + b) * (2 * k + a + b - 2) + epsilon
         theta2 = theta2_num / theta2_den
         
         temp = jacobi(k - 1, A)
