@@ -19,6 +19,7 @@ class Net(torch.nn.Module):
         self.dropout_ratio = args.dropout_ratio
         self.hop_num = args.hop_num
         self.appr_funcname = args.approx_func
+        self.graph_embedding = None
         if args.a:
             self.a = args.a
         else:
@@ -57,6 +58,9 @@ class Net(torch.nn.Module):
         x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim= 1)
 
         x = x1 + x2 + x3
+        
+        # For visualization purposes
+        self.graph_embedding = x
         
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=self.dropout_ratio, training=self.training)

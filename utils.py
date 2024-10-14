@@ -17,6 +17,8 @@ from torch_geometric.utils import coalesce, cumsum
 import numpy as np
 from collections import Counter
 from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
 
 class EarlyStopping:
     def __init__(self, patience=10):
@@ -230,6 +232,57 @@ def plotter(losses, accuracies = None):
         plt.savefig('plot-acc.png')
         plt.savefig('plot-acc.svg', format='svg')
         plt.show()
+
+def extract_embeddings(model: torch.nn.Module, dataloader, device):
+    """Extract graph embeddings from the model
+
+    Args:
+        model (torch.nn.Module): Trained GNN model
+        dataloader (torch.utils.data.DataLoader): Validation or any other dataloader containing the graphs
+        device (torch.device): Device
+
+    Returns:
+        tuple: (embeddings, labels)
+    """
+    model.eval()
+    embeddings = []
+    labels = []
+
+    with torch.no_grad():
+        for data in dataloader:
+            data = data.to(device)
+            _ = model(data)
+            graph_embeddings = model.graph_embedding
+            embeddings.append(graph_embeddings.cpu())
+            labels.append(data.y)
+
+    embeddings = torch.cat(embeddings, dim=0).numpy()
+    labels = torch.cat(labels, dim=0).numpy()
+
+    return embeddings, labels
+
+def plot_embeddings(embeddings: np.ndarray, labels: np.ndarray, method = 'tsne'):
+    if method == 'tsne':
+        reducer = TSNE(n_components=2, random_state=42)
+    elif method == 'pca':
+        reducer = PCA(n_components=2)
+    else:
+        raise ValueError('Supported methods are T-SNE and PCA')
+    
+    reduced_embeddings = reducer.fit_transform(embeddings)
+
+    plt.figure(figsize=(8, 6))
+    scatter = plt.scatter(reduced_embeddings[:, 0], reduced_embeddings[:, 1], c=labels, cmap='viridis', marker='o', s=50, alpha=0.7)
+    plt.colorbar(scatter, label='Class')
+    plt.title(f'{method.upper()} Visualization of Graph Embeddings')
+    plt.xlabel('Component 1')
+    plt.ylabel('Component 2')
+    plt.grid(True)
+    plt.tight_layout()
+
+    plt.savefig(f'{method}_embeddings.png')
+    plt.savefig(f'{method}_embeddings.svg', format='svg')
+    plt.show()
 
 def sample_dataset(dataset, sample_size, random_state = 42):
     labels = np.array([data.y.item() for data in dataset])
