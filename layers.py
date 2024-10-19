@@ -117,8 +117,6 @@ class JacobiPool(torch.nn.Module):
         # Aggregation of multi-hop attention scores.
         # x_hat = self.lin(x).squeeze()
         x_hat_ = self.lin(x)
-        # print('x_hat', x_hat.shape)
-        print('poly', x_hat_.shape)
         agg_score = torch.matmul(poly_a, x_hat_) # MLP can be added (high parameters, better mapping to a feature space)
 
         ##### Top-K selection procedure #####
