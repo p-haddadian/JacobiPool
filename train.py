@@ -201,7 +201,10 @@ def main(args):
     
     # loading the dataset
     print('[INFO]: Path:', os.path.join('data',args.dataset))
-    dataset = TUDataset(os.path.join('data', args.dataset), name=args.dataset)
+    if args.dataset == 'FRANKENSTEIN':
+        dataset = TUDataset(os.path.join('data', args.dataset), name=args.dataset, use_node_attr=True)
+    else:
+        dataset = TUDataset(os.path.join('data', args.dataset), name=args.dataset)
 
     # in case of sampling
         
