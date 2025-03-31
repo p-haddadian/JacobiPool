@@ -351,6 +351,12 @@ def model_train(args, train_loader, val_loader):
                 best_val_perf = val_perf
                 save_model = True
                 patience = 0
+                # Save the best model
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'val_perf': val_perf,
+                }, 'best_model.pth')
             else:
                 patience += 1
         else:
@@ -358,15 +364,20 @@ def model_train(args, train_loader, val_loader):
                 min_loss = val_loss
                 save_model = True
                 patience = 0
+                # Save the best model
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'val_loss': val_loss,
+                }, 'best_model.pth')
             else:
                 patience += 1
         
         if save_model:
-            torch.save(model.state_dict(), 'latest.pth')
-            print('Model saved at epoch {}'.format(epoch))
+            print(f'Model saved at epoch {epoch} with validation {perf_name}: {val_perf:.4f}')
         
         if patience > args.patience:
-            print('Maximum patience reached at epoch {} and val loss had no change'.format(epoch))
+            print(f'Maximum patience reached at epoch {epoch}')
             break
 
     stats['train_losses'] = train_losses
@@ -382,6 +393,11 @@ def model_train(args, train_loader, val_loader):
     print('\nTiming Statistics:')
     print(f'Average Epoch Time: {avg_epoch_time:.2f}s')
     print(f'Average Forward Pass Time: {avg_forward_time:.2f}s')
+    
+    # Load the best model for return
+    checkpoint = torch.load('best_model.pth')
+    model.load_state_dict(checkpoint['model_state_dict'])
+    print(f"\nLoaded best model from epoch {checkpoint['epoch']} with validation {perf_name}: {checkpoint['val_perf']:.4f}")
     
     return model.state_dict(), stats
 
@@ -587,7 +603,9 @@ def main(args):
         model.load_state_dict(model_state_dict)
     
     # Testing the model
-    model.load_state_dict(torch.load('latest.pth'))
+    print('\nLoading best model for testing...')
+    checkpoint = torch.load('best_model.pth')
+    model.load_state_dict(checkpoint['model_state_dict'])
     test_perf, test_loss = test(model, test_loader, args)
     print('---------------Test----------------')
     print(f'Test loss: {test_loss:.4f} | Test {metric_name}: {test_perf:.4f}')
