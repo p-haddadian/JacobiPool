@@ -136,18 +136,18 @@ def test(model, loader, args):
         y_pred = torch.cat(y_pred, dim=0).numpy()
         
         # Debug: Print class distribution
-        positive_count = np.sum(y_true == 1)
-        percent_positive = (positive_count / len(y_true)) * 100
-        print(f"Class distribution: {positive_count}/{len(y_true)} positive samples ({percent_positive:.2f}%)")
-        print(f"Positive rate in processed dataset: {total_positive}/{total_samples} ({(total_positive/total_samples)*100:.2f}%)")
+        # positive_count = np.sum(y_true == 1)
+        # percent_positive = (positive_count / len(y_true)) * 100
+        # print(f"Class distribution: {positive_count}/{len(y_true)} positive samples ({percent_positive:.2f}%)")
+        # print(f"Positive rate in processed dataset: {total_positive}/{total_samples} ({(total_positive/total_samples)*100:.2f}%)")
         
-        # Debug: Print prediction distribution
-        pred_positive = np.sum(y_pred == 1)
-        pred_percent = (pred_positive / len(y_pred)) * 100
-        print(f"Prediction distribution: {pred_positive}/{len(y_pred)} positive predictions ({pred_percent:.2f}%)")
+        # # Debug: Print prediction distribution
+        # pred_positive = np.sum(y_pred == 1)
+        # pred_percent = (pred_positive / len(y_pred)) * 100
+        # print(f"Prediction distribution: {pred_positive}/{len(y_pred)} positive predictions ({pred_percent:.2f}%)")
         
-        # Debug: Print model output stats
-        print(f"Model output stats: min={y_scores.min():.4f}, max={y_scores.max():.4f}, mean={y_scores.mean():.4f}, std={y_scores.std():.4f}")
+        # # Debug: Print model output stats
+        # print(f"Model output stats: min={y_scores.min():.4f}, max={y_scores.max():.4f}, mean={y_scores.mean():.4f}, std={y_scores.std():.4f}")
         
         if OGB_AVAILABLE:
             # Ensure inputs are 2D arrays as required by OGB evaluator
