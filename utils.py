@@ -7,6 +7,7 @@ from torch_geometric.utils import to_scipy_sparse_matrix
 from torch_geometric.transforms import laplacian_lambda_max
 from torch_sparse import SparseTensor
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 from scipy.sparse.linalg import eigsh, eigs
 import scipy.sparse as sp
@@ -19,6 +20,90 @@ from collections import Counter
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
+
+# Add synthetic features generation function
+def create_synthetic_features(dataset, num_features=10, seed=42):
+    """
+    Create synthetic node features for datasets without node features.
+    
+    Args:
+        dataset: PyG dataset without node features
+        num_features: Number of synthetic features to create
+        seed: Random seed for reproducibility
+        
+    Returns:
+        Dataset with synthetic features that preserves original dataset attributes
+    """
+    from torch_geometric.data import Dataset
+    
+    class SyntheticDataset(Dataset):
+        def __init__(self, original_dataset, processed_graphs):
+            super().__init__()
+            self.processed_graphs = processed_graphs
+            self._num_classes = getattr(original_dataset, 'num_classes', None)
+            self._num_features = num_features
+            
+            # If num_classes is not available, try to infer it
+            if self._num_classes is None:
+                labels = set()
+                for graph in processed_graphs:
+                    if hasattr(graph, 'y'):
+                        labels.add(graph.y.item() if graph.y.numel() == 1 else graph.y.max().item() + 1)
+                self._num_classes = len(labels)
+            
+            # Copy other important attributes
+            self.name = getattr(original_dataset, 'name', 'synthetic')
+            
+            # Copy any other non-property attributes
+            for attr in dir(original_dataset):
+                if not attr.startswith('_') and attr not in ['__class__', 'get', 'len', 'data', 'indices', 
+                                                           'num_classes', 'num_features']:
+                    try:
+                        setattr(self, attr, getattr(original_dataset, attr))
+                    except (AttributeError, TypeError):
+                        pass
+    
+        @property
+        def num_classes(self):
+            return self._num_classes
+            
+        @property
+        def num_features(self):
+            return self._num_features
+        
+        def len(self):
+            return len(self.processed_graphs)
+        
+        def get(self, idx):
+            return self.processed_graphs[idx]
+    
+    processed_graphs = []
+    torch.manual_seed(seed)
+    
+    for data in dataset:
+        num_nodes = data.num_nodes
+        
+        # Create feature matrix
+        x = torch.zeros(num_nodes, num_features)
+        
+        # Feature 1: Node degree (normalized)
+        row, col = data.edge_index
+        deg = torch.bincount(row, minlength=num_nodes).float()
+        max_deg = deg.max() if deg.numel() > 0 else 1.0
+        x[:, 0] = deg / (max_deg + 1e-8)
+        
+        # Feature 2: Random but deterministic features
+        for i in range(1, num_features):
+            # Use node index to create deterministic but varied features
+            for node_idx in range(num_nodes):
+                x[node_idx, i] = torch.cos(torch.tensor(node_idx * (i+1) / num_features * np.pi + seed)).item()
+        
+        # Add the feature matrix to the data object
+        data.x = x
+        processed_graphs.append(data)
+    
+    # Return dataset that preserves original metadata
+    return SyntheticDataset(dataset, processed_graphs)
 
 class EarlyStopping:
     def __init__(self, patience=10):
@@ -203,7 +288,7 @@ def laplacian_scale(laplacian_index: Tensor, laplacian_weight: Tensor, n_node: i
     return scaled_laplacian
 
 # Plot the loss and accuracy based on validation and training
-def plotter(losses, accuracies = None):
+def plotter(losses, metrics=None, y_label="Accuracy"):
     # plt.style.use('default')
 
     plt.figure()
@@ -219,18 +304,18 @@ def plotter(losses, accuracies = None):
     plt.savefig('plot-loss.svg', format='svg')
     plt.show()
 
-    if accuracies is not None:
+    if metrics is not None:
         plt.figure()
-        plt.plot(accuracies[0], label='Training Acc.', linewidth=2, marker='o', markersize=4, color='b')
-        plt.plot(accuracies[1], label='Validation Acc.', linewidth=2, marker='s', markersize=4, color = 'r')
-        plt.title('Evaluating Accuracy', fontsize=14)
+        plt.plot(metrics[0], label=f'Training {y_label}', linewidth=2, marker='o', markersize=4, color='b')
+        plt.plot(metrics[1], label=f'Validation {y_label}', linewidth=2, marker='s', markersize=4, color = 'r')
+        plt.title(f'Evaluating {y_label}', fontsize=14)
         plt.legend(frameon=False, fontsize=10)
         plt.xlabel('Epochs', fontsize=12)
-        plt.ylabel('Accuracy', fontsize=12)
+        plt.ylabel(y_label, fontsize=12)
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig('plot-acc.png')
-        plt.savefig('plot-acc.svg', format='svg')
+        plt.savefig(f'plot-{y_label.lower().replace(" ", "_")}.png')
+        plt.savefig(f'plot-{y_label.lower().replace(" ", "_")}.svg', format='svg')
         plt.show()
 
 def extract_embeddings(model: torch.nn.Module, dataloader, device):

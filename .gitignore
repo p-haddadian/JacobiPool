@@ -10,6 +10,7 @@ __pycache__/
 .Python
 build/
 data/
+dataset/
 develop-eggs/
 dist/
 downloads/
@@ -140,5 +141,7 @@ cython_debug/
 
 # Misc.
 *.png
+*.svg
+.vscode/
 
 # End of https://mrkandreev.name/snippets/gitignore-generator/#Python

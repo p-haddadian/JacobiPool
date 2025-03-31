@@ -43,7 +43,20 @@ class Net(torch.nn.Module):
         self.lin3 = Linear(self.hidden // 2, self.num_classes)
         
     def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
+        # Handle different data formats (PyG vs OGB)
+        if hasattr(data, 'x') and data.x is not None:
+            x = data.x
+        elif hasattr(data, 'node_feat') and data.node_feat is not None:
+            x = data.node_feat
+        else:
+            raise ValueError("No node features found in the input data")
+            
+        edge_index, batch = data.edge_index, data.batch
+        
+        # Ensure data types are correct
+        x = x.float()  # Convert features to float
+        if edge_index.dtype != torch.long:
+            edge_index = edge_index.long()  # Ensure edge_index is long tensor
 
         x = F.relu(self.conv1(x, edge_index))
         x, edge_index, _, batch, _ = self.pool1(x, edge_index, None, batch)
@@ -65,6 +78,16 @@ class Net(torch.nn.Module):
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=self.dropout_ratio, training=self.training)
         x = F.relu(self.lin2(x))
-        x = F.log_softmax(self.lin3(x), dim=-1)
+        
+        # Handle different output requirements based on task type
+        if hasattr(self, 'task_type') and self.task_type == 'binary':
+            # For binary classification (e.g., ogbg-molhiv), output a single value
+            x = self.lin3(x).view(-1)
+        elif hasattr(self, 'task_type') and self.task_type == 'multilabel':
+            # For multi-label classification (e.g., ogbg-molpcba), output raw values
+            x = self.lin3(x)
+        else:
+            # Default: multi-class classification with softmax
+            x = F.log_softmax(self.lin3(x), dim=-1)
         
         return x

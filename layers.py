@@ -1,6 +1,7 @@
 import torch
 from torch.nn import Linear
 from torch.nn.parameter import Parameter
+import torch.nn.functional as F
 from torch_geometric.nn import GATConv, GCNConv
 from torch_geometric.nn.pool.connect.filter_edges import filter_adj
 from torch_geometric.nn.pool.select.topk import topk
@@ -56,70 +57,126 @@ def chebyshev(k, A):
         return lhs - rhs
 
 
-def poly_approx(K, adj, alphas, poly_fn = chebyshev, **kwargs):
-    '''
-    Computes the polynomial approximation according to the specified polynomial function
-    '''
-    if poly_fn == jacobi:
-        for key, val in kwargs.items():
-            if key == 'a':
-                a = val
-            elif key == 'b':
-                b = val
+def jacobi2(K, xs, A, alphas, a=1.0, b=1.0, l=-1.0, r=1.0):
+    """
+    Jacobi polynomial implementation that maintains history of node embeddings.
+    Args:
+        K: current order of the polynomial
+        xs: list of previous node embeddings [x_0, x_1, ..., x_{K-1}]
+        A: adjacency matrix
+        alphas: polynomial coefficients (not used in base computation)
+        a, b: Jacobi polynomial parameters
+        l, r: scaling range
+    """
+    if K == 0:
+        return xs[0]
+    if K == 1:
+        coef1 = (a - b) / 2 - (a + b + 2) / 2 * (l + r) / (r - l)
+        coef2 = (a + b + 2) / (r - l)
+        return coef1 * xs[0] + coef2 * (A @ xs[0])
 
-    polynomial = torch.zeros_like(adj).coalesce()
-    if poly_fn == jacobi:
-        for k in range(K + 1):
-            polynomial += alphas[k] * poly_fn(k, adj, a, b)
+    coef_l = 2 * K * (K + a + b) * (2 * K - 2 + a + b)
+    coef_lm1_1 = (2 * K + a + b - 1) * (2 * K + a + b) * (2 * K + a + b - 2)
+    coef_lm1_2 = (2 * K + a + b - 1) * (a**2 - b**2)
+    coef_lm2 = 2 * (K - 1 + a) * (K - 1 + b) * (2 * K + a + b)
+
+    tmp1 = coef_lm1_1 / coef_l
+    tmp2 = coef_lm1_2 / coef_l
+    tmp3 = coef_lm2 / coef_l
+
+    tmp1_2 = tmp1 * (2 / (r - l))
+    tmp2_2 = tmp1 * ((r + l) / (r - l)) + tmp2
+
+    # Use the stored previous embeddings without alpha multiplication
+    return tmp1_2 * (A @ xs[-1]) - tmp2_2 * xs[-1] - tmp3 * xs[-2]
+
+
+def poly_approx(K, adj, x, alphas, poly_fn=chebyshev, **kwargs):
+    '''
+    Computes the polynomial approximation according to the specified polynomial function.
+    For Jacobi polynomials, this follows the PolyConv approach where alphas are applied
+    only once at the final summation.
+    '''
+    if poly_fn == jacobi2:
+        # Initialize list of embeddings with x_0
+        xs = [x]
+        # Compute and store embeddings for each order
+        for k in range(1, K + 1):
+            x_k = poly_fn(k, xs, adj, alphas, **kwargs)
+            xs.append(x_k)
+        # Return weighted sum of all embeddings (applying alphas here)
+        return sum(alpha * x_k for alpha, x_k in zip(alphas, xs))
     else:
+        # Handle other polynomial types (chebyshev, etc.)
+        polynomial = torch.zeros_like(adj).coalesce()
         for k in range(K + 1):
             polynomial += alphas[k] * poly_fn(k, adj)
-    return polynomial
+        return polynomial @ x
 
 
 class JacobiPool(torch.nn.Module):
-    def __init__(self, in_channels, ratio = 0.8, hop_num = 3, appr_funcname = 'chebyshev', a = 1.0, b = 1.0, approx_func = poly_approx, conv = GATConv, non_linearity = torch.tanh):
+    def __init__(self, in_channels, ratio=0.8, hop_num=3, appr_funcname='chebyshev', 
+                 a=1.0, b=1.0, approx_func=poly_approx, conv=GATConv, 
+                 non_linearity=torch.tanh, alpha=1.0, fixed=False, use_jacobi_diffusion=True):
         super(JacobiPool, self).__init__()
         self.in_channels = in_channels
         self.ratio = ratio
-        self.attention_layer = conv(in_channels, 1)
+        # Modified GATConv initialization to match SAGPool
+        self.attention_layer = conv(in_channels, 1, heads=1, concat=False)
         self.non_linearity = non_linearity
         self.K = hop_num
         self.adj = None
-        self.alphas = Parameter(torch.randn(self.K + 1))
+        
+        # Modified alpha parameters following PolyConvFrame
+        self.basealpha = alpha
+        self.alphas = torch.nn.ParameterList([
+            Parameter(torch.randn(1), 
+                     requires_grad=not fixed) for _ in range(hop_num + 1)
+        ])
+        
         self.appr_funcname = appr_funcname
         self.lin = Linear(in_channels, 1)
         self.approx_func = approx_func
         self.a = a
         self.b = b
+        self.use_jacobi_diffusion = use_jacobi_diffusion
     
-    def forward(self, x, edge_index, edge_attr = None, batch = None):
+    def forward(self, x, edge_index, edge_attr=None, batch=None):
         if batch is None:
             batch = edge_index.new_zeros(x.size(0))
         
-        # score: (|V|, heads_H * out = 1)    seems: att score for every node (aggregated from edge att)
-        # attention_e: ((2, |E|), (|E|, heads_H))   seems: att score for every edge.
-        score, attention_e = self.attention_layer(x, edge_index, return_attention_weights = True)
+        # Always compute attention scores first
+        score, attention_e = self.attention_layer(x, edge_index, return_attention_weights=True)
         edge_index_after, edge_attention = attention_e[0], attention_e[1]
+        
+        # Feature transformation
+        x_transformed = self.lin(x)
+        
+        # Apply polynomial approximation if diffusion is enabled
+        if self.use_jacobi_diffusion:
+            # Construct sparse adjacency matrix (in COO format)
+            n_node = x.size(0)
+            self.adj = sparse_adj(edge_index_after, edge_attention, n_node, aggr='GCN', format='coo')
+            
+            # Transform alphas using tanh like in PolyConvFrame
+            alphas = [self.basealpha * torch.tanh(alpha) for alpha in self.alphas]
 
-        # Construct a weighted adjacency matrix via the attention scores assigned to each edge
-        n_node = x.size(0)
-        self.adj = sparse_adj(edge_index_after, edge_attention, n_node, aggr='GCN', format='coo')
-
-        # computing k-hop of laplacian using polynomial approximation, whether jacobi or chebyshev (|V| * |V|) = (N * N)
-        if self.appr_funcname == 'chebyshev':
-            poly_a = self.approx_func(self.K, self.L, self.alphas, chebyshev)
-        elif self.appr_funcname == 'jacobi':
-            poly_a = self.approx_func(self.K, self.adj, self.alphas, jacobi, a=self.a, b=self.b)
+            if self.appr_funcname == 'chebyshev':
+                agg_score = self.approx_func(self.K, self.adj, x_transformed, alphas, chebyshev)
+            elif self.appr_funcname == 'jacobi':
+                agg_score = self.approx_func(self.K, self.adj, x_transformed, alphas, jacobi2, 
+                                           a=self.a, b=self.b)
+                agg_score += x_transformed
+                agg_score = agg_score.squeeze()
+            else:
+                raise ValueError('The specified approximation function is not defined')
         else:
-            raise ValueError('The specified approxiation function is not defined')
+            # If diffusion is not used, combine attention and transformed features
+            agg_score = score + x_transformed  # Direct addition without tanh to maintain gradient flow
+            # agg_score = score
+            agg_score = agg_score.squeeze()
 
-        # Aggregation of multi-hop attention scores.
-        # x_hat = self.lin(x).squeeze()
-        x_hat_ = self.lin(x)
-        agg_score = torch.matmul(poly_a, x_hat_) # MLP can be added (high parameters, better mapping to a feature space)
-
-        ##### Top-K selection procedure #####
+        # Top-K selection
         perm = topk(agg_score, self.ratio, batch)
         x = x[perm] * self.non_linearity(agg_score[perm]).view(-1, 1)
         batch = batch[perm]
