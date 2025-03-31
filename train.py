@@ -32,17 +32,17 @@ from utils import plotter, sample_dataset
 
 def arg_parse(args = None):
     parser = argparse.ArgumentParser(description='JacobiPool')
-    parser.add_argument('--dataset', type=str, default='ogbg-molhiv', help='DD/PROTEINS/NCI1/NCI109/Mutagenicity/ogbg-molhiv/ogbg-molpcba')
-    parser.add_argument('--epochs', type=int, default=50, help='maximum number of epochs')
+    parser.add_argument('--dataset', type=str, default='NCI1', help='DD/PROTEINS/NCI1/NCI109/Mutagenicity/ogbg-molhiv/ogbg-molpcba')
+    parser.add_argument('--epochs', type=int, default=300, help='maximum number of epochs')
     parser.add_argument('--seed', type=int, default=777, help='seed')
     parser.add_argument('--device', type=str, default='cpu', help='device selection: cuda or cpu')
-    parser.add_argument('--batch_size', type=int, default=32 , help='batch size')
-    parser.add_argument('--lr', type=float, default=0.1, help='learning rate')
+    parser.add_argument('--batch_size', type=int, default=16 , help='batch size')
+    parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
     parser.add_argument('--approx_func', type=str, default='jacobi', help='desired approximation function (e.g. jacobi, chebyshev)')
-    parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay')
-    parser.add_argument('--num_hidden', type=int, default=32, help='hidden size')
+    parser.add_argument('--weight_decay', type=float, default=0.0005, help='weight decay')
+    parser.add_argument('--num_hidden', type=int, default=64, help='hidden size')
     parser.add_argument('--pooling_ratio', type=float, default=0.8, help='pooling ratio')
-    parser.add_argument('--dropout_ratio', type=float, default=0.2, help='dropout ratio')
+    parser.add_argument('--dropout_ratio', type=float, default=0.4, help='dropout ratio')
     parser.add_argument('--num_heads', type=int, default=2, help="number of hidden attention heads")
     parser.add_argument("--hop_num", type=int, default=3, help="hop number")
     parser.add_argument("--p_norm", type=int, default=0.0, help="p_norm")
@@ -54,6 +54,7 @@ def arg_parse(args = None):
     parser.add_argument('--colab', type=bool, default=True, help='Indicate whether you are using Google Colab')
     parser.add_argument('--a', type=float, default=1.0, help='Jacobi hyperparameter a')
     parser.add_argument('--b', type=float, default=1.0, help='Jacobi hyperparameter b')
+    parser.add_argument('--test_only', action='store_true', help='Skip training and only test using saved model')
     args = parser.parse_args(args)
     return args
 
@@ -74,50 +75,79 @@ def test(model, loader, args):
     y_pred = []
     y_scores = []
     
+    # Debug: Print dataset size
+    # print(f"Evaluating on dataset with {len(loader.dataset)} samples")
+    
     # Select loss function based on dataset
     if args.dataset.startswith('ogbg-molpcba'):
         loss_fcn = torch.nn.BCEWithLogitsLoss()
     elif args.dataset == 'ogbg-molhiv':
-        loss_fcn = torch.nn.BCEWithLogitsLoss()
+        # Calculate positive weight for binary classification to handle class imbalance
+        pos_weight = torch.tensor([2.0]).to(args.device)  # Initial estimate, will be refined during training
+        loss_fcn = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     else:
         loss_fcn = torch.nn.CrossEntropyLoss()
     
-    for data in loader:
-        data = data.to(args.device)
-        out = model(data)
-        
-        # Handle different dataset formats
-        if args.dataset.startswith('ogbg-mol'):
-            if args.dataset == 'ogbg-molhiv':
-                # Binary classification
-                y = data.y.float()
-                
-                if out.ndim == 1 and y.ndim == 2:
-                    y = y.squeeze(1)
-                elif out.ndim == 2 and y.ndim == 1:
-                    y = y.unsqueeze(1)
-                
-                loss += loss_fcn(out, y).item()
-                pred = (out > 0).float()
-                y_true.append(y.detach().cpu())
-                y_scores.append(out.detach().cpu())
-                y_pred.append(pred.detach().cpu())
-            elif args.dataset == 'ogbg-molpcba':
-                y = data.y.float()
-                # Skip NaN targets
-                is_valid = ~torch.isnan(y)
-                loss += loss_fcn(out[is_valid], y[is_valid]).item()
-                y_true.append(y.detach().cpu())
-                y_scores.append(out.detach().cpu())
-        else:
-            pred = out.max(dim=1)[1]
-            correct += pred.eq(data.y).sum().item()
-            loss += loss_fcn(out, data.y).item()
+    # Debug: Count positive samples
+    total_positive = 0
+    total_samples = 0
+    
+    with torch.no_grad():  # Ensure we don't store gradients during testing
+        for data in loader:
+            data = data.to(args.device)
+            out = model(data)
+            
+            # Handle different dataset formats
+            if args.dataset.startswith('ogbg-mol'):
+                if args.dataset == 'ogbg-molhiv':
+                    # Binary classification
+                    y = data.y.float()
+                    
+                    if out.ndim == 1 and y.ndim == 2:
+                        y = y.squeeze(1)
+                    elif out.ndim == 2 and y.ndim == 1:
+                        y = y.unsqueeze(1)
+                    
+                    # Debug: Count positive samples
+                    total_samples += y.shape[0]
+                    total_positive += y.sum().item()
+                    
+                    loss += loss_fcn(out, y).item()
+                    pred = (out > 0).float()
+                    y_true.append(y.detach().cpu())
+                    y_scores.append(out.detach().cpu())
+                    y_pred.append(pred.detach().cpu())
+                elif args.dataset == 'ogbg-molpcba':
+                    y = data.y.float()
+                    # Skip NaN targets
+                    is_valid = ~torch.isnan(y)
+                    loss += loss_fcn(out[is_valid], y[is_valid]).item()
+                    y_true.append(y.detach().cpu())
+                    y_scores.append(out.detach().cpu())
+            else:
+                pred = out.max(dim=1)[1]
+                correct += pred.eq(data.y).sum().item()
+                loss += loss_fcn(out, data.y).item()
     
     if args.dataset == 'ogbg-molhiv':
         # ROC-AUC for binary classification
         y_true = torch.cat(y_true, dim=0).numpy()
         y_scores = torch.cat(y_scores, dim=0).numpy()
+        y_pred = torch.cat(y_pred, dim=0).numpy()
+        
+        # Debug: Print class distribution
+        positive_count = np.sum(y_true == 1)
+        percent_positive = (positive_count / len(y_true)) * 100
+        print(f"Class distribution: {positive_count}/{len(y_true)} positive samples ({percent_positive:.2f}%)")
+        print(f"Positive rate in processed dataset: {total_positive}/{total_samples} ({(total_positive/total_samples)*100:.2f}%)")
+        
+        # Debug: Print prediction distribution
+        pred_positive = np.sum(y_pred == 1)
+        pred_percent = (pred_positive / len(y_pred)) * 100
+        print(f"Prediction distribution: {pred_positive}/{len(y_pred)} positive predictions ({pred_percent:.2f}%)")
+        
+        # Debug: Print model output stats
+        print(f"Model output stats: min={y_scores.min():.4f}, max={y_scores.max():.4f}, mean={y_scores.mean():.4f}, std={y_scores.std():.4f}")
         
         if OGB_AVAILABLE:
             # Ensure inputs are 2D arrays as required by OGB evaluator
@@ -130,6 +160,13 @@ def test(model, loader, args):
             input_dict = {"y_true": y_true, "y_pred": y_scores}
             result_dict = evaluator.eval(input_dict)
             score = result_dict["rocauc"]
+            
+            # Debug: Manual calculation to verify
+            try:
+                manual_roc = roc_auc_score(y_true, y_scores)
+                print(f"Manual ROC-AUC calculation: {manual_roc:.4f} (OGB evaluator: {score:.4f})")
+            except Exception as e:
+                print(f"Error in manual ROC-AUC calculation: {e}")
         else:
             score = roc_auc_score(y_true, y_scores)
             
@@ -159,6 +196,9 @@ def test(model, loader, args):
         return score, loss / len(loader)
     
     else:
+        # For TU datasets, we're already scaling by the dataset size
+        # We could add debugging to verify the calculation if needed
+        # print(f"Test Loss: {loss}, Dataset size: {len(loader.dataset)}, Final Loss: {loss / len(loader.dataset)}")
         return correct / len(loader.dataset), loss / len(loader.dataset)
 
 def model_train(args, train_loader, val_loader):
@@ -169,6 +209,12 @@ def model_train(args, train_loader, val_loader):
         model.task_type = args.task_type
 
     print(f'[INFO]: Model architecture:\n{model}')
+
+    # Print parameter initialization stats
+    # print("[INFO]: Checking model initialization...")
+    # for name, param in model.named_parameters():
+    #     if param.requires_grad:
+    #         print(f"  {name}: min={param.data.min().item():.4f}, max={param.data.max().item():.4f}, mean={param.data.mean().item():.4f}, std={param.data.std().item():.4f}")
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     
@@ -195,7 +241,9 @@ def model_train(args, train_loader, val_loader):
     if args.dataset.startswith('ogbg-molpcba'):
         loss_fcn = torch.nn.BCEWithLogitsLoss()
     elif args.dataset == 'ogbg-molhiv':
-        loss_fcn = torch.nn.BCEWithLogitsLoss()
+        # Calculate positive weight for binary classification to handle class imbalance
+        pos_weight = torch.tensor([2.0]).to(args.device)  # Initial estimate, will be refined during training
+        loss_fcn = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     else:
         loss_fcn = torch.nn.CrossEntropyLoss()
 
@@ -225,6 +273,15 @@ def model_train(args, train_loader, val_loader):
         y_scores = []
         correct = 0
 
+        # Print scaling factors once at the start of training to help understand the loss calculation
+        if epoch == 0:
+            if args.dataset.startswith('ogbg-mol'):
+                print(f"[INFO]: OGB dataset - train loss will be scaled by batch count: 1/{len(train_loader)}")
+            else:
+                print(f"[INFO]: TU dataset - train loss will be scaled by sample count: 1/{len(train_loader.dataset)}")
+                print(f"[INFO]: For reference - batch scaling would be: 1/{len(train_loader)}")
+                print(f"[INFO]: Scaling factor difference: {len(train_loader.dataset)/len(train_loader):.2f}x")
+                
         for i, data in enumerate(train_loader):
             data = data.to(args.device)
             
@@ -250,6 +307,15 @@ def model_train(args, train_loader, val_loader):
                     elif out.ndim == 2 and y.ndim == 1:
                         y = y.unsqueeze(1)
                     
+                    # Dynamically update positive weight based on batch statistics
+                    if i == 0 and epoch % 5 == 0:
+                        batch_pos_weight = ((1 - y).sum() / y.sum()).item()
+                        # Clip to reasonable range to prevent instability
+                        batch_pos_weight = max(1.0, min(5.0, batch_pos_weight))
+                        loss_fcn.pos_weight = torch.tensor([batch_pos_weight]).to(args.device)
+                        if args.verbose >= 1:
+                            print(f"Updated positive weight to {batch_pos_weight:.2f}")
+                    
                     loss = loss_fcn(out, y)
                     
                 # Store predictions for metric calculation
@@ -267,7 +333,10 @@ def model_train(args, train_loader, val_loader):
             loss_all += loss.item()
             
             loss.backward()
-
+            
+            # Apply gradient clipping to prevent exploding gradients
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
             optimizer.step()
             optimizer.zero_grad()
 
@@ -314,7 +383,14 @@ def model_train(args, train_loader, val_loader):
 
         # Evaluate on validation set
         val_perf, val_loss = test(model, val_loader, args)
-        train_loss = loss_all / len(train_loader)
+        
+        # Calculate training loss with appropriate scaling
+        if args.dataset.startswith('ogbg-mol'):
+            # OGB datasets - keep as is 
+            train_loss = loss_all / len(train_loader)
+        else:
+            # TU datasets - scale by dataset size to match validation loss calculation
+            train_loss = loss_all / len(train_loader.dataset)
         
         # Step the scheduler based on the appropriate metric
         if args.dataset.startswith('ogbg-mol'):
@@ -334,6 +410,10 @@ def model_train(args, train_loader, val_loader):
         
         print('Epoch: {0} | Train Loss: {1:.4f} | Val Loss: {2:.4f} | Train {3}: {4:.4f} | Val {3}: {5:.4f} | LR: {6:.6f}'.format(
             epoch, train_loss, val_loss, perf_name, train_perf, val_perf, current_lr))
+            
+        # Print note about scaling on first epoch to explain the change
+        if epoch == 0 and not args.dataset.startswith('ogbg-mol'):
+            print("[NOTE]: Train and validation losses are now scaled by the same factor (sample count) for direct comparison.")
         
         if args.verbose == 2:
             print('Epoch Time: {:.2f}s | Forward Pass Time: {:.2f}s'.format(epoch_time, forward_time))
@@ -397,7 +477,9 @@ def model_train(args, train_loader, val_loader):
     # Load the best model for return
     checkpoint = torch.load('best_model.pth')
     model.load_state_dict(checkpoint['model_state_dict'])
-    print(f"\nLoaded best model from epoch {checkpoint['epoch']} with validation {perf_name}: {checkpoint['val_perf']:.4f}")
+    perf_key = 'val_perf' if args.dataset.startswith('ogbg-mol') else 'val_loss'
+    perf_value = checkpoint.get(perf_key, 0.0)
+    print(f"\nLoaded best model from epoch {checkpoint['epoch']} with validation {perf_name}: {perf_value:.4f}")
     
     return model.state_dict(), stats
 
@@ -595,7 +677,21 @@ def main(args):
               len(training_set), len(validation_set), len(test_set)))
     
     # Model construction
-    if args.hyptune == 1:
+    if args.test_only:
+        print("\n[INFO]: Test only mode - skipping training")
+        model = Net(args).to(args.device)
+        # Attempt to load the best model
+        try:
+            print('\nLoading best model for testing...')
+            checkpoint = torch.load('best_model.pth')
+            model.load_state_dict(checkpoint['model_state_dict'])
+            perf_key = 'val_perf' if args.dataset.startswith('ogbg-mol') else 'val_loss'
+            perf_value = checkpoint.get(perf_key, 0.0)
+            print(f"Loaded model from epoch {checkpoint['epoch']} with validation performance: {perf_value:.4f}")
+        except Exception as e:
+            print(f"[ERROR]: Could not load model: {e}")
+            return
+    elif args.hyptune == 1:
         model, stats = run_optimization(args, train_loader, val_loader)
     else:
         model_state_dict, stats = model_train(args, train_loader, val_loader)
@@ -603,18 +699,34 @@ def main(args):
         model.load_state_dict(model_state_dict)
     
     # Testing the model
-    print('\nLoading best model for testing...')
-    checkpoint = torch.load('best_model.pth')
-    model.load_state_dict(checkpoint['model_state_dict'])
+    if not args.test_only:
+        print('\nLoading best model for testing...')
+        checkpoint = torch.load('best_model.pth')
+        model.load_state_dict(checkpoint['model_state_dict'])
+    
+    # Detailed evaluation on test set
+    print("\n-------- Detailed Test Evaluation --------")
     test_perf, test_loss = test(model, test_loader, args)
     print('---------------Test----------------')
     print(f'Test loss: {test_loss:.4f} | Test {metric_name}: {test_perf:.4f}')
 
-    # Plotting the metrics
-    perf_label = "AP" if args.dataset == 'ogbg-molpcba' else "ROC-AUC" if args.dataset == 'ogbg-molhiv' else "Accuracy"
-    losses = [stats['train_losses'], stats['val_losses']]
-    metrics = [stats['train_perfs'], stats['val_perfs']]
-    plotter(losses, metrics, y_label=perf_label)
+    # Also evaluate on validation set for comparison
+    print("\n-------- Validation Set Evaluation --------")
+    val_perf, val_loss = test(model, val_loader, args)
+    print('---------------Validation----------------')
+    print(f'Validation loss: {val_loss:.4f} | Validation {metric_name}: {val_perf:.4f}')
+    
+    # Difference between validation and test performance
+    perf_diff = abs(val_perf - test_perf)
+    perf_pct = perf_diff / (abs(val_perf) + 1e-8) * 100  # Avoid division by zero
+    print(f"\nValidation-Test gap: {perf_diff:.4f} ({perf_pct:.2f}% difference)")
+
+    # Plotting the metrics (only if not in test_only mode)
+    if not args.test_only:
+        perf_label = "AP" if args.dataset == 'ogbg-molpcba' else "ROC-AUC" if args.dataset == 'ogbg-molhiv' else "Accuracy"
+        losses = [stats['train_losses'], stats['val_losses']]
+        metrics = [stats['train_perfs'], stats['val_perfs']]
+        plotter(losses, metrics, y_label=perf_label)
 
 
 

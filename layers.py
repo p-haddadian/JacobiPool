@@ -166,6 +166,7 @@ class JacobiPool(torch.nn.Module):
             elif self.appr_funcname == 'jacobi':
                 agg_score = self.approx_func(self.K, self.adj, x_transformed, alphas, jacobi2, 
                                            a=self.a, b=self.b)
+                # Add residual connection to preserve original features
                 agg_score += x_transformed
                 agg_score = agg_score.squeeze()
             else:
@@ -173,7 +174,6 @@ class JacobiPool(torch.nn.Module):
         else:
             # If diffusion is not used, combine attention and transformed features
             agg_score = score + x_transformed  # Direct addition without tanh to maintain gradient flow
-            # agg_score = score
             agg_score = agg_score.squeeze()
 
         # Top-K selection

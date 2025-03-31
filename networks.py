@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
-from torch.nn import Linear
+from torch.nn import Linear, BatchNorm1d
+import math
 from torch_geometric.nn import GCNConv
 from torch_geometric.nn import global_max_pool as gmp
 from torch_geometric.nn import global_mean_pool as gap
@@ -30,17 +31,43 @@ class Net(torch.nn.Module):
             self.b = 1.0
 
         self.conv1 = GCNConv(self.num_features, self.hidden)
+        self.bn1 = BatchNorm1d(self.hidden)
         self.pool1 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, self.a, self.b)
 
         self.conv2 = GCNConv(self.hidden, self.hidden)
+        self.bn2 = BatchNorm1d(self.hidden)
         self.pool2 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, self.a, self.b)
 
         self.conv3 = GCNConv(self.hidden, self.hidden)
+        self.bn3 = BatchNorm1d(self.hidden)
         self.pool3 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, self.a, self.b)
 
         self.lin1 = Linear(self.hidden * 2, self.hidden)
+        self.bn4 = BatchNorm1d(self.hidden)
         self.lin2 = Linear(self.hidden, self.hidden // 2)
+        self.bn5 = BatchNorm1d(self.hidden // 2)
         self.lin3 = Linear(self.hidden // 2, self.num_classes)
+        
+        # Better initialization
+        self._reset_parameters()
+        
+    def _reset_parameters(self):
+        """Initialize parameters with better values to prevent vanishing/exploding gradients"""
+        for m in self.modules():
+            if isinstance(m, Linear):
+                # Xavier uniform initialization for linear layers
+                torch.nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    # Initialize bias with a small positive value for binary classification
+                    if m == self.lin3 and self.num_classes == 1:
+                        # For binary classification output layer, slight positive bias 
+                        # helps with class imbalance
+                        torch.nn.init.constant_(m.bias, 0.1)
+                    else:
+                        torch.nn.init.zeros_(m.bias)
+            elif isinstance(m, BatchNorm1d):
+                torch.nn.init.constant_(m.weight, 1)
+                torch.nn.init.constant_(m.bias, 0)
         
     def forward(self, data):
         # Handle different data formats (PyG vs OGB)
@@ -58,26 +85,42 @@ class Net(torch.nn.Module):
         if edge_index.dtype != torch.long:
             edge_index = edge_index.long()  # Ensure edge_index is long tensor
 
-        x = F.relu(self.conv1(x, edge_index))
+        # First block
+        x = self.conv1(x, edge_index)
+        x = self.bn1(x)
+        x = F.relu(x)
         x, edge_index, _, batch, _ = self.pool1(x, edge_index, None, batch)
-        x1 = torch.cat([gmp(x, batch), gap(x, batch)], dim= 1)
+        x1 = torch.cat([gmp(x, batch), gap(x, batch)], dim=1)
 
-        x = F.relu(self.conv2(x, edge_index))
+        # Second block
+        x = self.conv2(x, edge_index)
+        x = self.bn2(x)
+        x = F.relu(x)
         x, edge_index, _, batch, _ = self.pool2(x, edge_index, None, batch)
-        x2 = torch.cat([gmp(x, batch), gap(x, batch)], dim= 1)
+        x2 = torch.cat([gmp(x, batch), gap(x, batch)], dim=1)
 
-        x = F.relu(self.conv3(x, edge_index))
+        # Third block
+        x = self.conv3(x, edge_index)
+        x = self.bn3(x)
+        x = F.relu(x)
         x, edge_index, _, batch, _ = self.pool3(x, edge_index, None, batch)
-        x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim= 1)
+        x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim=1)
 
-        x = x1 + x2 + x3
+        # Combine features from all blocks with trained weights
+        x = (x1 + x2 + x3) / 3  # Averaging instead of simple addition
         
         # For visualization purposes
         self.graph_embedding = x
         
-        x = F.relu(self.lin1(x))
+        # Feedforward layers
+        x = self.lin1(x)
+        x = self.bn4(x)
+        x = F.relu(x)
         x = F.dropout(x, p=self.dropout_ratio, training=self.training)
-        x = F.relu(self.lin2(x))
+        
+        x = self.lin2(x)
+        x = self.bn5(x)
+        x = F.relu(x)
         
         # Handle different output requirements based on task type
         if hasattr(self, 'task_type') and self.task_type == 'binary':
