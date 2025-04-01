@@ -32,17 +32,17 @@ from utils import plotter, sample_dataset
 
 def arg_parse(args = None):
     parser = argparse.ArgumentParser(description='JacobiPool')
-    parser.add_argument('--dataset', type=str, default='NCI1', help='DD/PROTEINS/NCI1/NCI109/Mutagenicity/ogbg-molhiv/ogbg-molpcba')
-    parser.add_argument('--epochs', type=int, default=300, help='maximum number of epochs')
+    parser.add_argument('--dataset', type=str, default='DD', help='DD/PROTEINS/NCI1/NCI109/Mutagenicity/ogbg-molhiv/ogbg-molpcba')
+    parser.add_argument('--epochs', type=int, default=3, help='maximum number of epochs')
     parser.add_argument('--seed', type=int, default=777, help='seed')
     parser.add_argument('--device', type=str, default='cpu', help='device selection: cuda or cpu')
     parser.add_argument('--batch_size', type=int, default=16 , help='batch size')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
     parser.add_argument('--approx_func', type=str, default='jacobi', help='desired approximation function (e.g. jacobi, chebyshev)')
-    parser.add_argument('--weight_decay', type=float, default=0.0005, help='weight decay')
-    parser.add_argument('--num_hidden', type=int, default=64, help='hidden size')
+    parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay')
+    parser.add_argument('--num_hidden', type=int, default=32, help='hidden size')
     parser.add_argument('--pooling_ratio', type=float, default=0.8, help='pooling ratio')
-    parser.add_argument('--dropout_ratio', type=float, default=0.4, help='dropout ratio')
+    parser.add_argument('--dropout_ratio', type=float, default=0.2, help='dropout ratio')
     parser.add_argument('--num_heads', type=int, default=2, help="number of hidden attention heads")
     parser.add_argument("--hop_num", type=int, default=3, help="hop number")
     parser.add_argument("--p_norm", type=int, default=0.0, help="p_norm")
@@ -92,7 +92,7 @@ def test(model, loader, args):
     total_positive = 0
     total_samples = 0
     
-    with torch.no_grad():  # Ensure we don't store gradients during testing
+    with torch.no_grad():
         for data in loader:
             data = data.to(args.device)
             out = model(data)
@@ -135,7 +135,7 @@ def test(model, loader, args):
         y_scores = torch.cat(y_scores, dim=0).numpy()
         y_pred = torch.cat(y_pred, dim=0).numpy()
         
-        # Debug: Print class distribution
+        # Debug: Print class distribution and model outputs
         # positive_count = np.sum(y_true == 1)
         # percent_positive = (positive_count / len(y_true)) * 100
         # print(f"Class distribution: {positive_count}/{len(y_true)} positive samples ({percent_positive:.2f}%)")
@@ -146,7 +146,7 @@ def test(model, loader, args):
         # pred_percent = (pred_positive / len(y_pred)) * 100
         # print(f"Prediction distribution: {pred_positive}/{len(y_pred)} positive predictions ({pred_percent:.2f}%)")
         
-        # # Debug: Print model output stats
+        # # Debug: Print model output stats to check for constant outputs
         # print(f"Model output stats: min={y_scores.min():.4f}, max={y_scores.max():.4f}, mean={y_scores.mean():.4f}, std={y_scores.std():.4f}")
         
         if OGB_AVAILABLE:
@@ -162,11 +162,11 @@ def test(model, loader, args):
             score = result_dict["rocauc"]
             
             # Debug: Manual calculation to verify
-            try:
-                manual_roc = roc_auc_score(y_true, y_scores)
-                print(f"Manual ROC-AUC calculation: {manual_roc:.4f} (OGB evaluator: {score:.4f})")
-            except Exception as e:
-                print(f"Error in manual ROC-AUC calculation: {e}")
+            # try:
+            #     manual_roc = roc_auc_score(y_true, y_scores)
+            #     print(f"Manual ROC-AUC calculation: {manual_roc:.4f} (OGB evaluator: {score:.4f})")
+            # except Exception as e:
+            #     print(f"Error in manual ROC-AUC calculation: {e}")
         else:
             score = roc_auc_score(y_true, y_scores)
             
@@ -313,7 +313,7 @@ def model_train(args, train_loader, val_loader):
                         # Clip to reasonable range to prevent instability
                         batch_pos_weight = max(1.0, min(5.0, batch_pos_weight))
                         loss_fcn.pos_weight = torch.tensor([batch_pos_weight]).to(args.device)
-                        if args.verbose >= 1:
+                        if args.verbose == 2:
                             print(f"Updated positive weight to {batch_pos_weight:.2f}")
                     
                     loss = loss_fcn(out, y)
@@ -412,8 +412,8 @@ def model_train(args, train_loader, val_loader):
             epoch, train_loss, val_loss, perf_name, train_perf, val_perf, current_lr))
             
         # Print note about scaling on first epoch to explain the change
-        if epoch == 0 and not args.dataset.startswith('ogbg-mol'):
-            print("[NOTE]: Train and validation losses are now scaled by the same factor (sample count) for direct comparison.")
+        # if epoch == 0 and not args.dataset.startswith('ogbg-mol'):
+        #     print("[INFO]: Train and validation losses are now scaled by the same factor (sample count) for direct comparison.")
         
         if args.verbose == 2:
             print('Epoch Time: {:.2f}s | Forward Pass Time: {:.2f}s'.format(epoch_time, forward_time))
@@ -436,6 +436,8 @@ def model_train(args, train_loader, val_loader):
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'val_perf': val_perf,
+                    'task_type': getattr(model, 'task_type', None),  # Save the task_type if it exists
+                    'dataset': args.dataset
                 }, 'best_model.pth')
             else:
                 patience += 1
@@ -449,6 +451,8 @@ def model_train(args, train_loader, val_loader):
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'val_loss': val_loss,
+                    'task_type': getattr(model, 'task_type', None),  # Save the task_type if it exists
+                    'dataset': args.dataset
                 }, 'best_model.pth')
             else:
                 patience += 1
@@ -477,6 +481,20 @@ def model_train(args, train_loader, val_loader):
     # Load the best model for return
     checkpoint = torch.load('best_model.pth')
     model.load_state_dict(checkpoint['model_state_dict'])
+    
+    # Set task_type from checkpoint if available, otherwise use the dataset type
+    saved_task_type = checkpoint.get('task_type', None)
+    if saved_task_type:
+        model.task_type = saved_task_type
+        print(f"Set task_type from checkpoint: {saved_task_type}")
+    elif args.dataset.startswith('ogbg-mol'):
+        if args.dataset == 'ogbg-molhiv':
+            model.task_type = 'binary'
+            print("Set task_type to 'binary' based on dataset")
+        elif args.dataset == 'ogbg-molpcba':
+            model.task_type = 'multilabel'
+            print("Set task_type to 'multilabel' based on dataset")
+    
     perf_key = 'val_perf' if args.dataset.startswith('ogbg-mol') else 'val_loss'
     perf_value = checkpoint.get(perf_key, 0.0)
     print(f"\nLoaded best model from epoch {checkpoint['epoch']} with validation {perf_name}: {perf_value:.4f}")
@@ -685,6 +703,20 @@ def main(args):
             print('\nLoading best model for testing...')
             checkpoint = torch.load('best_model.pth')
             model.load_state_dict(checkpoint['model_state_dict'])
+            
+            # Set task_type from checkpoint if available, otherwise use the dataset type
+            saved_task_type = checkpoint.get('task_type', None)
+            if saved_task_type:
+                model.task_type = saved_task_type
+                print(f"Set task_type from checkpoint: {saved_task_type}")
+            elif args.dataset.startswith('ogbg-mol'):
+                if args.dataset == 'ogbg-molhiv':
+                    model.task_type = 'binary'
+                    print("Set task_type to 'binary' based on dataset")
+                elif args.dataset == 'ogbg-molpcba':
+                    model.task_type = 'multilabel'
+                    print("Set task_type to 'multilabel' based on dataset")
+            
             perf_key = 'val_perf' if args.dataset.startswith('ogbg-mol') else 'val_loss'
             perf_value = checkpoint.get(perf_key, 0.0)
             print(f"Loaded model from epoch {checkpoint['epoch']} with validation performance: {perf_value:.4f}")
@@ -703,6 +735,19 @@ def main(args):
         print('\nLoading best model for testing...')
         checkpoint = torch.load('best_model.pth')
         model.load_state_dict(checkpoint['model_state_dict'])
+        
+        # Set task_type from checkpoint if available, otherwise use the dataset type
+        saved_task_type = checkpoint.get('task_type', None)
+        if saved_task_type:
+            model.task_type = saved_task_type
+            print(f"Set task_type from checkpoint: {saved_task_type}")
+        elif args.dataset.startswith('ogbg-mol'):
+            if args.dataset == 'ogbg-molhiv':
+                model.task_type = 'binary'
+                print("Set task_type to 'binary' based on dataset")
+            elif args.dataset == 'ogbg-molpcba':
+                model.task_type = 'multilabel'
+                print("Set task_type to 'multilabel' based on dataset")
     
     # Detailed evaluation on test set
     print("\n-------- Detailed Test Evaluation --------")
