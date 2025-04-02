@@ -32,17 +32,17 @@ from utils import plotter, sample_dataset
 
 def arg_parse(args = None):
     parser = argparse.ArgumentParser(description='JacobiPool')
-    parser.add_argument('--dataset', type=str, default='DD', help='DD/PROTEINS/NCI1/NCI109/Mutagenicity/ogbg-molhiv/ogbg-molpcba')
-    parser.add_argument('--epochs', type=int, default=3, help='maximum number of epochs')
+    parser.add_argument('--dataset', type=str, default='FRANKENSTEIN', help='DD/PROTEINS/NCI1/NCI109/Mutagenicity/ogbg-molhiv/ogbg-molpcba')
+    parser.add_argument('--epochs', type=int, default=300, help='maximum number of epochs')
     parser.add_argument('--seed', type=int, default=777, help='seed')
     parser.add_argument('--device', type=str, default='cpu', help='device selection: cuda or cpu')
     parser.add_argument('--batch_size', type=int, default=16 , help='batch size')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
     parser.add_argument('--approx_func', type=str, default='jacobi', help='desired approximation function (e.g. jacobi, chebyshev)')
-    parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay')
-    parser.add_argument('--num_hidden', type=int, default=32, help='hidden size')
+    parser.add_argument('--weight_decay', type=float, default=0.001, help='weight decay')
+    parser.add_argument('--num_hidden', type=int, default=8, help='hidden size')
     parser.add_argument('--pooling_ratio', type=float, default=0.8, help='pooling ratio')
-    parser.add_argument('--dropout_ratio', type=float, default=0.2, help='dropout ratio')
+    parser.add_argument('--dropout_ratio', type=float, default=0.4, help='dropout ratio')
     parser.add_argument('--num_heads', type=int, default=2, help="number of hidden attention heads")
     parser.add_argument("--hop_num", type=int, default=3, help="hop number")
     parser.add_argument("--p_norm", type=int, default=0.0, help="p_norm")
@@ -55,6 +55,7 @@ def arg_parse(args = None):
     parser.add_argument('--a', type=float, default=1.0, help='Jacobi hyperparameter a')
     parser.add_argument('--b', type=float, default=1.0, help='Jacobi hyperparameter b')
     parser.add_argument('--test_only', action='store_true', help='Skip training and only test using saved model')
+    parser.add_argument('--lr_patience', type=int, default=10, help='The learning rate scheduler patience')
     args = parser.parse_args(args)
     return args
 
@@ -223,7 +224,7 @@ def model_train(args, train_loader, val_loader):
             optimizer, 
             mode='max',           # Maximize metrics for OGB datasets
             factor=0.5,           # Multiply LR by this factor when reducing
-            patience=10,          # Number of epochs with no improvement after which LR will be reduced
+            patience=args.lr_patience,          # Number of epochs with no improvement after which LR will be reduced
             verbose=True,         # Print message when LR is reduced
             min_lr=1e-6           # Lower bound on the learning rate
         )
@@ -232,7 +233,7 @@ def model_train(args, train_loader, val_loader):
             optimizer, 
             mode='min',           # Minimize validation loss for TU datasets
             factor=0.5,           # Multiply LR by this factor when reducing
-            patience=10,          # Number of epochs with no improvement after which LR will be reduced
+            patience=args.lr_patience,          # Number of epochs with no improvement after which LR will be reduced
             verbose=True,         # Print message when LR is reduced
             min_lr=1e-6           # Lower bound on the learning rate
         )
