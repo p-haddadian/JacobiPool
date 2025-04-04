@@ -29,18 +29,29 @@ class Net(torch.nn.Module):
             self.b = args.b
         else:
             self.b = 1.0
+            
+        # Check if use_jacobi_diffusion is specified in args
+        self.use_jacobi_diffusion = getattr(args, 'use_jacobi_diffusion', True)
+        # Check if use_edge_attention is specified in args
+        self.use_edge_attention = getattr(args, 'use_edge_attention', True)
 
         self.conv1 = GCNConv(self.num_features, self.hidden)
         self.bn1 = BatchNorm1d(self.hidden)
-        self.pool1 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, self.a, self.b)
+        self.pool1 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, 
+                               self.a, self.b, use_jacobi_diffusion=self.use_jacobi_diffusion,
+                               use_edge_attention=self.use_edge_attention)
 
         self.conv2 = GCNConv(self.hidden, self.hidden)
         self.bn2 = BatchNorm1d(self.hidden)
-        self.pool2 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, self.a, self.b)
+        self.pool2 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, 
+                               self.a, self.b, use_jacobi_diffusion=self.use_jacobi_diffusion,
+                               use_edge_attention=self.use_edge_attention)
 
         self.conv3 = GCNConv(self.hidden, self.hidden)
         self.bn3 = BatchNorm1d(self.hidden)
-        self.pool3 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, self.a, self.b)
+        self.pool3 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, 
+                               self.a, self.b, use_jacobi_diffusion=self.use_jacobi_diffusion,
+                               use_edge_attention=self.use_edge_attention)
 
         self.lin1 = Linear(self.hidden * 2, self.hidden)
         self.bn4 = BatchNorm1d(self.hidden)

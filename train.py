@@ -52,10 +52,12 @@ def arg_parse(args = None):
     parser.add_argument('--hyptune', type=int, default=0, help='whether you want Optuna find the best hyperparameters (1 for hyperparameter tunning)')
     parser.add_argument('--sample_size', type=float, default=-1, help='if want to train on a subset of dataset, specify the number of samples')
     parser.add_argument('--colab', type=bool, default=True, help='Indicate whether you are using Google Colab')
-    parser.add_argument('--a', type=float, default=1.0, help='Jacobi hyperparameter a')
-    parser.add_argument('--b', type=float, default=1.0, help='Jacobi hyperparameter b')
+    parser.add_argument('--a', type=float, default=0.0, help='Jacobi hyperparameter a')
+    parser.add_argument('--b', type=float, default=0.0, help='Jacobi hyperparameter b')
     parser.add_argument('--test_only', action='store_true', help='Skip training and only test using saved model')
     parser.add_argument('--lr_patience', type=int, default=10, help='The learning rate scheduler patience')
+    parser.add_argument('--use_jacobi_diffusion', type=bool, default=True, help='Whether to use Jacobi diffusion in the pooling layer')
+    parser.add_argument('--use_edge_attention', type=bool, default=False, help='Whether to use learned edge attention or GCN-like normalization')
     args = parser.parse_args(args)
     return args
 

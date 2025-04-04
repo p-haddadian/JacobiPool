@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import GATConv, GCNConv
 from torch_geometric.nn.pool.connect.filter_edges import filter_adj
 from torch_geometric.nn.pool.select.topk import topk
-from torch_geometric.utils import get_laplacian
+from torch_geometric.utils import get_laplacian, add_self_loops, degree
 
 from functools import lru_cache
 
@@ -117,7 +117,8 @@ def poly_approx(K, adj, x, alphas, poly_fn=chebyshev, **kwargs):
 class JacobiPool(torch.nn.Module):
     def __init__(self, in_channels, ratio=0.8, hop_num=3, appr_funcname='chebyshev', 
                  a=1.0, b=1.0, approx_func=poly_approx, conv=GATConv, 
-                 non_linearity=torch.tanh, alpha=1.0, fixed=False, use_jacobi_diffusion=True):
+                 non_linearity=torch.tanh, alpha=1.0, fixed=False, 
+                 use_jacobi_diffusion=True, use_edge_attention=True):
         super(JacobiPool, self).__init__()
         self.in_channels = in_channels
         self.ratio = ratio
@@ -140,17 +141,36 @@ class JacobiPool(torch.nn.Module):
         self.a = a
         self.b = b
         self.use_jacobi_diffusion = use_jacobi_diffusion
+        self.use_edge_attention = use_edge_attention
     
     def forward(self, x, edge_index, edge_attr=None, batch=None):
         if batch is None:
             batch = edge_index.new_zeros(x.size(0))
         
-        # Always compute attention scores first
-        score, attention_e = self.attention_layer(x, edge_index, return_attention_weights=True)
-        edge_index_after, edge_attention = attention_e[0], attention_e[1]
-        
-        # Feature transformation
+        # Feature transformation for node scores
         x_transformed = self.lin(x)
+        
+        if self.use_edge_attention:
+            # Use learned attention weights
+            score, attention_e = self.attention_layer(x, edge_index, return_attention_weights=True)
+            edge_index_after, edge_attention = attention_e[0], attention_e[1]
+        else:
+            # Use GCN-like normalization instead of learned attention
+            edge_index_after = edge_index
+            # Add self-loops to edge_index
+            edge_index_with_self, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+            # Calculate node degrees
+            row, col = edge_index_with_self
+            deg = degree(row, x.size(0), dtype=x.dtype)
+            # Create normalization
+            deg_inv_sqrt = deg.pow(-0.5)
+            deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
+            # GCN-like edge weights: 1/sqrt(deg(i)) * 1/sqrt(deg(j))
+            # For the edges without self-loops
+            edge_attention = deg_inv_sqrt[row] * deg_inv_sqrt[col]
+            edge_attention = edge_attention[:edge_index.size(1)]  # Remove self-loop weights
+            # Use transformed features for node scores
+            score = x_transformed
         
         # Apply polynomial approximation if diffusion is enabled
         if self.use_jacobi_diffusion:
@@ -173,8 +193,7 @@ class JacobiPool(torch.nn.Module):
                 raise ValueError('The specified approximation function is not defined')
         else:
             # If diffusion is not used, combine attention and transformed features
-            agg_score = score + x_transformed  # Direct addition without tanh to maintain gradient flow
-            agg_score = agg_score.squeeze()
+            agg_score = score.squeeze()  # Just use direct scores
 
         # Top-K selection
         perm = topk(agg_score, self.ratio, batch)
