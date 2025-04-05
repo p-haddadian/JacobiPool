@@ -1,8 +1,8 @@
 import torch
 import torch.nn.functional as F
-from torch.nn import Linear, BatchNorm1d
+from torch.nn import Linear, BatchNorm1d, Sequential, ReLU
 import math
-from torch_geometric.nn import GCNConv
+from torch_geometric.nn import GCNConv, GATConv, GINConv
 from torch_geometric.nn import global_max_pool as gmp
 from torch_geometric.nn import global_mean_pool as gap
 
@@ -21,6 +21,9 @@ class Net(torch.nn.Module):
         self.hop_num = args.hop_num
         self.appr_funcname = args.approx_func
         self.graph_embedding = None
+        # Selecting the graph convolution operation
+        self.graph_conv = args.graph_conv if hasattr(args, 'graph_conv') else "GCN"
+        
         if args.a:
             self.a = args.a
         else:
@@ -35,19 +38,57 @@ class Net(torch.nn.Module):
         # Check if use_edge_attention is specified in args
         self.use_edge_attention = getattr(args, 'use_edge_attention', True)
 
-        self.conv1 = GCNConv(self.num_features, self.hidden)
+        # Create the appropriate convolution layers based on the selected type
+        if self.graph_conv == "GCN":
+            self.conv1 = GCNConv(self.num_features, self.hidden)
+            self.conv2 = GCNConv(self.hidden, self.hidden)
+            self.conv3 = GCNConv(self.hidden, self.hidden)
+        elif self.graph_conv == "GAT":
+            # For GAT, we'll use a single head for simplicity
+            self.conv1 = GATConv(self.num_features, self.hidden, heads=1)
+            self.conv2 = GATConv(self.hidden, self.hidden, heads=1)
+            self.conv3 = GATConv(self.hidden, self.hidden, heads=1)
+        elif self.graph_conv == "GIN":
+            # For GIN, we need to create nn modules
+            self.conv1 = GINConv(
+                Sequential(
+                    Linear(self.num_features, self.hidden),
+                    ReLU(),
+                    Linear(self.hidden, self.hidden),
+                    ReLU(),
+                    BatchNorm1d(self.hidden),
+                ), train_eps=True)
+            
+            self.conv2 = GINConv(
+                Sequential(
+                    Linear(self.hidden, self.hidden),
+                    ReLU(),
+                    Linear(self.hidden, self.hidden),
+                    ReLU(),
+                    BatchNorm1d(self.hidden),
+                ), train_eps=True)
+                
+            self.conv3 = GINConv(
+                Sequential(
+                    Linear(self.hidden, self.hidden),
+                    ReLU(),
+                    Linear(self.hidden, self.hidden),
+                    ReLU(),
+                    BatchNorm1d(self.hidden),
+                ), train_eps=True)
+        else:
+            raise ValueError(f"The specified graph convolution operation {self.graph_conv} is not valid. Choose from GCN, GAT, or GIN.")
+
         self.bn1 = BatchNorm1d(self.hidden)
         self.pool1 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, 
                                self.a, self.b, use_jacobi_diffusion=self.use_jacobi_diffusion,
                                use_edge_attention=self.use_edge_attention)
 
-        self.conv2 = GCNConv(self.hidden, self.hidden)
         self.bn2 = BatchNorm1d(self.hidden)
         self.pool2 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, 
                                self.a, self.b, use_jacobi_diffusion=self.use_jacobi_diffusion,
                                use_edge_attention=self.use_edge_attention)
 
-        self.conv3 = GCNConv(self.hidden, self.hidden)
         self.bn3 = BatchNorm1d(self.hidden)
         self.pool3 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, 
                                self.a, self.b, use_jacobi_diffusion=self.use_jacobi_diffusion,
