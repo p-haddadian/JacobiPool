@@ -43,11 +43,15 @@ class Net(torch.nn.Module):
             self.conv1 = GCNConv(self.num_features, self.hidden)
             self.conv2 = GCNConv(self.hidden, self.hidden)
             self.conv3 = GCNConv(self.hidden, self.hidden)
+            self.conv4 = GCNConv(self.hidden, self.hidden)
+            self.conv5 = GCNConv(self.hidden, self.hidden)
         elif self.graph_conv == "GAT":
             # For GAT, we'll use a single head for simplicity
             self.conv1 = GATConv(self.num_features, self.hidden, heads=1)
             self.conv2 = GATConv(self.hidden, self.hidden, heads=1)
             self.conv3 = GATConv(self.hidden, self.hidden, heads=1)
+            self.conv4 = GATConv(self.hidden, self.hidden, heads=1)
+            self.conv5 = GATConv(self.hidden, self.hidden, heads=1)
         elif self.graph_conv == "GIN":
             # For GIN, we need to create nn modules
             self.conv1 = GINConv(
@@ -76,6 +80,24 @@ class Net(torch.nn.Module):
                     ReLU(),
                     BatchNorm1d(self.hidden),
                 ), train_eps=True)
+
+            self.conv4 = GINConv(
+                Sequential(
+                    Linear(self.hidden, self.hidden),
+                    ReLU(),
+                    Linear(self.hidden, self.hidden),
+                    ReLU(),
+                    BatchNorm1d(self.hidden),
+                ), train_eps=True)
+
+            self.conv5 = GINConv(
+                Sequential(
+                    Linear(self.hidden, self.hidden),
+                    ReLU(),
+                    Linear(self.hidden, self.hidden),
+                    ReLU(),
+                    BatchNorm1d(self.hidden),
+                ), train_eps=True)
         else:
             raise ValueError(f"The specified graph convolution operation {self.graph_conv} is not valid. Choose from GCN, GAT, or GIN.")
 
@@ -94,10 +116,20 @@ class Net(torch.nn.Module):
                                self.a, self.b, use_jacobi_diffusion=self.use_jacobi_diffusion,
                                use_edge_attention=self.use_edge_attention)
 
-        self.lin1 = Linear(self.hidden * 2, self.hidden)
         self.bn4 = BatchNorm1d(self.hidden)
+        self.pool4 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, 
+                               self.a, self.b, use_jacobi_diffusion=self.use_jacobi_diffusion,
+                               use_edge_attention=self.use_edge_attention)
+
+        self.bn5 = BatchNorm1d(self.hidden)
+        self.pool5 = JacobiPool(self.hidden, self.pooling_ratio, self.hop_num, self.appr_funcname, 
+                               self.a, self.b, use_jacobi_diffusion=self.use_jacobi_diffusion,
+                               use_edge_attention=self.use_edge_attention)
+
+        self.lin1 = Linear(self.hidden * 2, self.hidden)
+        self.bn6 = BatchNorm1d(self.hidden)
         self.lin2 = Linear(self.hidden, self.hidden // 2)
-        self.bn5 = BatchNorm1d(self.hidden // 2)
+        self.bn7 = BatchNorm1d(self.hidden // 2)
         self.lin3 = Linear(self.hidden // 2, self.num_classes)
         
         # Better initialization
@@ -158,20 +190,34 @@ class Net(torch.nn.Module):
         x, edge_index, _, batch, _ = self.pool3(x, edge_index, None, batch)
         x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim=1)
 
+        # Fourth block
+        x = self.conv4(x, edge_index)
+        x = self.bn4(x)
+        x = F.relu(x)
+        x, edge_index, _, batch, _ = self.pool4(x, edge_index, None, batch)
+        x4 = torch.cat([gmp(x, batch), gap(x, batch)], dim=1)
+
+        # Fifth block
+        x = self.conv5(x, edge_index)
+        x = self.bn5(x)
+        x = F.relu(x)
+        x, edge_index, _, batch, _ = self.pool5(x, edge_index, None, batch)
+        x5 = torch.cat([gmp(x, batch), gap(x, batch)], dim=1)
+
         # Combine features from all blocks with trained weights
-        x = (x1 + x2 + x3) / 3  # Averaging instead of simple addition
+        x = (x1 + x2 + x3 + x4 + x5) / 5  # Averaging instead of simple addition
         
         # For visualization purposes
         self.graph_embedding = x
         
         # Feedforward layers
         x = self.lin1(x)
-        x = self.bn4(x)
+        x = self.bn6(x)
         x = F.relu(x)
         x = F.dropout(x, p=self.dropout_ratio, training=self.training)
         
         x = self.lin2(x)
-        x = self.bn5(x)
+        x = self.bn7(x)
         x = F.relu(x)
         
         # Handle different output requirements based on task type
